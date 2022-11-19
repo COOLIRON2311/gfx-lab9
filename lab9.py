@@ -9,49 +9,12 @@ from tkinter import simpledialog as sd
 import numpy as np
 import pygame as pg
 
+from enums import Projection, ShapeType
+
 # pylint: disable=no-member
 # pylint: disable=eval-used
-
-
-class Projection(Enum):
-    Perspective = 0
-    Axonometric = 1
-    FreeCamera = 2
-
-    def __str__(self) -> str:
-        match self:
-            case Projection.Perspective:
-                return "Перспективная"
-            case Projection.Axonometric:
-                return "Аксонометрическая"
-            case Projection.FreeCamera:
-                return "Свободная камера"
-        return "Неизвестная проекция"
-
-
-class ShapeType(Enum):
-    Tetrahedron = 0
-    Hexahedron = 1
-    Octahedron = 2
-    Icosahedron = 3
-    Dodecahedron = 4
-
-    def __str__(self) -> str:
-        match self:
-            case ShapeType.Tetrahedron:
-                return "Тетраэдр"
-            case ShapeType.Hexahedron:
-                return "Гексаэдр"
-            case ShapeType.Octahedron:
-                return "Октаэдр"
-            case ShapeType.Icosahedron:
-                return "Икосаэдр"
-            case ShapeType.Dodecahedron:
-                return "Додекаэдр"
-            case _:
-                pass
-        return "Неизвестная фигура"
-
+# pylint: disable=too-many-instance-attributes
+# pylint: disable=too-many-lines
 
 class Shape:
     """Base class for all shapes"""
@@ -317,7 +280,7 @@ class Polygon(Shape):
 
         step = (z2-z1)/(x2-x1)
 
-        for x in np.arange(x1, x2):
+        for _ in np.arange(x1, x2):
             res.append(z1)
             z1 += step
 
@@ -337,21 +300,15 @@ class Polygon(Shape):
         ymax = max(p.y for p in points)
         ymin = min(p.y for p in points)
 
-        far = max(p.z for p in points)
-        near = min(p.z for p in points)
-
         for y in range(int(ymin), int(ymax)):
             intersections: list[Point] = []
             for line in lines:
                 if line.p1.y <= y < line.p2.y or line.p2.y <= y < line.p1.y:
-                    t = self.interpolate(line.p1.x, line.p1.z, line.p2.x, line.p2.z)
                     intersections.append(Point(line.get_x(y), y, line.get_z(y)))
             intersections.sort(key=lambda p: p.x)
             for i in range(0, len(intersections), 2):
                 z = self.interpolate(intersections[i].x, intersections[i].z, intersections[i+1].x, intersections[i+1].z)
                 for x in range(int(intersections[i].x), int(intersections[i+1].x)):
-                    # z = self.points[0].z  # TODO: calculate z
-                    #z = far/(far - near) + 1/intersections[i].z * ((-2*far*near)/(far-near))
                     cz = z[x-int(intersections[i].x)]
                     ZBuffer.draw_point(canvas, x, y, cz, color)
 
@@ -421,7 +378,7 @@ class Polyhedron(Shape):
                      sum(polygon.center.z for polygon in self.polygons) /
                      len(self.polygons))
 
-    def fill(self, canvas: pg.Surface, color: pg.Color):
+    def fill(self, canvas: pg.Surface, _: pg.Color):
         count = 0
         colors = [pg.Color("red"), pg.Color("green"), pg.Color("blue"), pg.Color('yellow')]
         for poly in self.polygons:
@@ -659,7 +616,7 @@ class Models:
 
 
 class App(tk.Tk):
-    W: int = 1200
+    W: int = 1000
     H: int = 600
     shape: Shape = None
     shape_type_idx: int
@@ -1062,7 +1019,6 @@ class ZBuffer:
 
     @staticmethod
     def draw_point(canvas: pg.Surface, x: int, y: int, z: float, color: pg.Color):
-        #d = Camera.dist_to(x, y, z)
         if ZBuffer.enabled and 0 <= x < App.W and 0 <= y < App.H:
             if ZBuffer.data[y, x] > z:
                 ZBuffer.data[y, x] = z
