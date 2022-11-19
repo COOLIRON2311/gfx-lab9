@@ -232,7 +232,7 @@ class App:
         n = sd.askinteger("Number of points", "Enter number of points", minvalue=3)
         if n is None:
             return
-        func = sd.askstring("Function", "Enter function", initialvalue="sin(x)")
+        func = sd.askstring("Function", "Enter function", initialvalue="z*sin(x)")
         if func is None:
             return
         func = eval(f"lambda x, z: {func}")
@@ -266,6 +266,7 @@ class App:
             for e in pg.event.get():
                 if e.type == pg.QUIT:
                     pg.quit()
+                    return
 
                 elif e.type == pg.KEYDOWN:
                     if e.key == pg.K_w:
