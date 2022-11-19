@@ -4,9 +4,7 @@ from enum import Enum
 from math import cos, pi, radians, sin, sqrt
 from threading import Thread
 from tkinter import filedialog as fd
-from tkinter import messagebox as mb
 from tkinter import simpledialog as sd
-from typing import Callable
 
 import numpy as np
 import pygame as pg
@@ -31,47 +29,12 @@ class Projection(Enum):
         return "Неизвестная проекция"
 
 
-class Mode(Enum):
-    Translate = 0  # перемещение
-    Rotate = 1  # вращение
-    Scale = 2  # масштабирование
-
-    def __str__(self) -> str:
-        return super().__str__().split(".")[-1]
-
-
-class Function(Enum):
-    None_ = 0
-    ReflectOverPlane = 1
-    ScaleAboutCenter = 2
-    RotateAroundAxis = 3
-    RotateAroundLine = 4
-
-    def __str__(self) -> str:
-        match self:
-            case Function.None_:
-                return "Не выбрано"
-            case Function.ReflectOverPlane:
-                return "Отражение относительно плоскости"
-            case Function.ScaleAboutCenter:
-                return "Масштабирование относ. центра"
-            case Function.RotateAroundAxis:
-                return "Вращение относительно оси"
-            case Function.RotateAroundLine:
-                return "Вращение вокруг прямой"
-            case _:
-                pass
-        return "Неизвестная функция"
-
-
 class ShapeType(Enum):
     Tetrahedron = 0
     Hexahedron = 1
     Octahedron = 2
     Icosahedron = 3
     Dodecahedron = 4
-    RotationBody = 5
-    FuncPlot = 6
 
     def __str__(self) -> str:
         match self:
@@ -85,10 +48,6 @@ class ShapeType(Enum):
                 return "Икосаэдр"
             case ShapeType.Dodecahedron:
                 return "Додекаэдр"
-            case ShapeType.RotationBody:
-                return "Тело вращения"
-            case ShapeType.FuncPlot:
-                return "График функции"
             case _:
                 pass
         return "Неизвестная фигура"
@@ -110,7 +69,7 @@ class Shape:
     def load(path: str) -> 'Shape':
         with open(path, "r", encoding='utf8') as file:
             s = eval(file.read())
-            if isinstance(s, (Polyhedron, FuncPlot)):
+            if isinstance(s, Polyhedron):
                 s.fix_points()
             return s
 
@@ -411,15 +370,6 @@ class Polygon(Shape):
                      sum(point.z for point in self.points) / len(self.points))
 
     def calculate_normal(self) -> Point:
-        # normal = Point(0, 0, 0)
-        # ln = len(self.points)
-        # for i in range(ln):
-        #     currentv = self.points[i]
-        #     nextv = self.points[(i + 1) % ln]
-        #     normal.x += (currentv.y - nextv.y) * (currentv.z + nextv.z)
-        #     normal.y += (currentv.z - nextv.z) * (currentv.x + nextv.x)
-        #     normal.z += (currentv.x - nextv.x) * (currentv.y + nextv.y)
-        # return normal.normalized()
         p1 = np.array(self.points[0])
         p2 = np.array(self.points[1])
         p3 = np.array(self.points[2])
@@ -439,7 +389,7 @@ class Polyhedron(Shape):
         for poly in self.polygons:
             if bfc:
                 v0 = np.array(poly.points[0])
-                n = np.array(poly.normal)  # /np.linalg.norm(np.array(poly.normal))d
+                n = np.array(poly.normal)
                 if np.dot(v0 - p, n) < 0:
                     poly.draw(canvas, projection, color, draw_points)
                 # else:
@@ -477,141 +427,6 @@ class Polyhedron(Shape):
         for poly in self.polygons:
             poly.fill(canvas, colors[count % 4])
             count += 1
-
-
-@dataclass
-class RotationBody(Shape):
-    polygon: Polygon
-    axis: str
-    partitions: int
-    _mesh: Polyhedron = field(init=False, default=None)
-
-    def draw(self, canvas: pg.Surface, projection: Projection, color: str = 'white', draw_points: bool = False):
-        if self._mesh:
-            self._mesh.draw(canvas, projection, color, draw_points)
-            return
-        angle = radians(360 / self.partitions)
-        poly = self.polygon.copy()
-        surface = []
-        # Cheese:
-        # 0, 0, 0, 0, 100, 0, 100, 100, 0, 100, 0, 0, Y, 10
-        # Vase:
-        # 0,0,0, 100,0,0, 100,50,0, 50,50,0, 150,250,0, 100,250,0, 100,300,0, 150,300,0, 150,350,0, 0,350,0, Y, 10
-        for _ in range(self.partitions):
-            surface.append(poly.copy())
-            self.rotate(poly, angle)
-
-        mesh = []
-        # pylint: disable=consider-using-enumerate
-        for i in range(self.partitions):
-            poly1: Polygon = surface[i]
-            poly2: Polygon = surface[(i + 1) % self.partitions]
-            for j in range(len(poly1.points)):
-                mesh.append(Polygon([poly1.points[j], poly1.points[(j + 1) % len(poly1.points)],
-                                     poly2.points[(j + 1) % len(poly2.points)], poly2.points[j]]))
-        self._mesh = Polyhedron(mesh)
-        self._mesh.fix_points()
-        self._mesh.draw(canvas, projection, color, draw_points)
-
-    def rotate(self, poly: Polygon, phi: float):
-        match self.axis:
-            case 'X':
-                mat = np.array([
-                    [1, 0, 0, 0],
-                    [0, cos(phi), -sin(phi), 0],
-                    [0, sin(phi), cos(phi), 0],
-                    [0, 0, 0, 1]])
-            case 'Z':
-                mat = np.array([
-                    [cos(phi), -sin(phi), 0, 0],
-                    [sin(phi), cos(phi), 0, 0],
-                    [0, 0, 1, 0],
-                    [0, 0, 0, 1]])
-            case 'Y':
-                mat = np.array([
-                    [cos(phi), 0, sin(phi), 0],
-                    [0, 1, 0, 0],
-                    [-sin(phi), 0, cos(phi), 0],
-                    [0, 0, 0, 1]])
-            case _:
-                raise ValueError("Invalid axis")
-        poly.transform(mat)
-
-    def transform(self, matrix: np.ndarray):
-        self._mesh.transform(matrix)
-
-    @property
-    def center(self) -> 'Point':
-        return self.polygon.center
-
-    def save(self, path: str):
-        self._mesh.save(path)
-
-
-@dataclass
-class FuncPlot(Shape):
-    func: Callable[[float, float], float]
-    x0: float
-    x1: float
-    y0: float
-    y1: float
-    nx: int
-    ny: int
-    _polyhedron: Polyhedron = field(init=False, default=None, repr=False)
-
-    def __init__(self, func: str, x0: float, x1: float, y0: float, y1: float, nx: int, ny: int):
-        self.func = eval(f"lambda x, y: {func}")
-        self.x0 = x0
-        self.x1 = x1
-        self.y0 = y0
-        self.y1 = y1
-        self.nx = nx
-        self.ny = ny
-        self._polyhedron = self._build_polyhedron()
-        self.fix_points()
-
-    def draw(self, canvas: pg.Surface, projection: Projection, color: str = 'white', draw_points: bool = False):
-        self._polyhedron.draw(canvas, projection, color, draw_points)
-
-    def save(self, path: str):
-        self._polyhedron.save(path)
-
-    def transform(self, matrix: np.ndarray) -> None:
-        self._polyhedron.transform(matrix)
-
-    def fix_points(self):
-        points: dict[tuple[float, float, float], Point] = {}
-        for poly in self._polyhedron.polygons:
-            for i, point in enumerate(poly.points):
-                k = (point.x, point.y, point.z)
-                if k not in points:
-                    points[k] = point
-                else:
-                    poly.points[i] = points[k]
-
-    def _build_polyhedron(self) -> Polyhedron:
-        polygons = []
-        dx = (self.x1 - self.x0) / self.nx
-        dy = (self.y1 - self.y0) / self.ny
-        for i in range(self.nx):
-            for j in range(self.ny):
-                x0 = self.x0 + i * dx
-                y0 = self.y0 + j * dy
-                x1 = x0 + dx
-                y1 = y0 + dy
-                #z0 = self.func(x0, y0)
-                #z1 = self.func(x1, y1)
-                polygons.append(Polygon([
-                    Point(x0, y0, self.func(x0, y0)),
-                    Point(x1, y0, self.func(x1, y0)),
-                    Point(x1, y1, self.func(x1, y1)),
-                    Point(x0, y1, self.func(x0, y1))
-                ]))
-        return Polyhedron(polygons)
-
-    @property
-    def center(self) -> Point:
-        return self._polyhedron.center
 
 
 class Camera:
@@ -849,8 +664,6 @@ class App(tk.Tk):
     shape: Shape = None
     shape_type_idx: int
     shape_type: ShapeType
-    func_idx: int
-    func: Function
     projection: Projection
     projection_idx: int
     phi: int = 60
@@ -866,8 +679,6 @@ class App(tk.Tk):
         self.geometry(f"{self.W+200}x{70}+0+0")
         self.shape_type_idx = 0
         self.shape_type = ShapeType(self.shape_type_idx)
-        self.func_idx = 0
-        self.func = Function(self.func_idx)
         self.projection_idx = 0
         self.projection = Projection(self.projection_idx)
         self.create_widgets()
@@ -908,14 +719,10 @@ class App(tk.Tk):
             self.buttons, selectmode=tk.SINGLE, height=1, width=16)
         self.scroll1 = tk.Scrollbar(
             self.buttons, orient=tk.VERTICAL, command=self._scroll1)
-        self.funcsbox = tk.Listbox(
-            self.buttons, selectmode=tk.SINGLE, height=1, width=40)
-        self.scroll2 = tk.Scrollbar(
-            self.buttons, orient=tk.VERTICAL, command=self._scroll2)
         self.projectionsbox = tk.Listbox(
             self.buttons, selectmode=tk.SINGLE, height=1, width=20)
         self.scroll3 = tk.Scrollbar(
-            self.buttons, orient=tk.VERTICAL, command=self._scroll3)
+            self.buttons, orient=tk.VERTICAL, command=self._scroll2)
 
         # self.canvas.pack()
         # self.canvas.config(cursor="cross")
@@ -945,17 +752,9 @@ class App(tk.Tk):
         self.projectionsbox.pack(side=tk.RIGHT, padx=1)
         self.projectionsbox.config(yscrollcommand=self.scroll3.set)
 
-        self.scroll2.pack(side=tk.RIGHT, fill=tk.Y)
-        self.funcsbox.pack(side=tk.RIGHT, padx=1)
-        self.funcsbox.config(yscrollcommand=self.scroll2.set)
-
         self.shapesbox.delete(0, tk.END)
         self.shapesbox.insert(tk.END, *ShapeType)
         self.shapesbox.selection_set(0)
-
-        self.funcsbox.delete(0, tk.END)
-        self.funcsbox.insert(tk.END, *Function)
-        self.funcsbox.selection_set(0)
 
         self.projectionsbox.delete(0, tk.END)
         self.projectionsbox.insert(tk.END, *Projection)
@@ -1084,16 +883,6 @@ class App(tk.Tk):
             d = int(args[1])
         except ValueError:
             return
-        if 0 <= self.func_idx + d < len(Function):
-            self.func_idx += d
-            self.func = Function(self.func_idx)
-            self.funcsbox.yview(*args)
-
-    def _scroll3(self, *args):
-        try:
-            d = int(args[1])
-        except ValueError:
-            return
         if 0 <= self.projection_idx + d < len(Projection):
             self.projection_idx += d
             self.projection = Projection(self.projection_idx)
@@ -1137,25 +926,6 @@ class App(tk.Tk):
                 self.shape = Models.Icosahedron()
             case ShapeType.Dodecahedron:
                 self.shape = Models.Dodecahedron()
-            case ShapeType.RotationBody:
-                def __thread():
-                    t = tk.Tk()
-                    t.withdraw()
-                    inp = sd.askstring("Параметры", "Введите набор точек, ось вращения и количество разбиений через запятую:", parent=t)
-                    if inp is None:
-                        return
-                    *points, axis, patritions = inp.split(',')
-                    if not len(points) % 3 == 0:
-                        return
-                    poly = []
-                    for i in range(0, len(points), 3):
-                        poly.append(Point(float(points[i]), float(points[i + 1]), float(points[i + 2])))
-                    self.shape = RotationBody(Polygon(poly), axis.strip().upper(), int(patritions))
-                    t.destroy()
-                    # Coin: 0, 0, 0, 0, 100, 0, 0, 0, 100, Y, 120
-                t = Thread(target=__thread)
-                t.start()
-                t.join()
         if self.shape is not None:
             if App.zbuf.get():
                 self.__temp_model()
@@ -1174,173 +944,6 @@ class App(tk.Tk):
         # t.draw(self.canvas, self.projection, color=pg.Color('red'))
         t.fill(self.canvas, pg.Color('red'))
 
-    def r_click(self, _):
-        if self.shape is None:
-            return
-
-        def __thread():
-            t = tk.Tk()
-            t.withdraw()
-
-            match self.func:
-                case Function.None_:
-                    return
-
-                case Function.ReflectOverPlane:
-                    # https://www.gatevidyalay.com/3d-reflection-in-computer-graphics-definition-examples/
-                    inp = sd.askstring(
-                        "Отражение", "Введите плоскость отражения (н-р: XY):", parent=t)
-                    if inp is None:
-                        return
-                    plane = ''.join(sorted(inp.strip().upper()))
-
-                    mat_xy = np.array([
-                        [1, 0, 0, 0],
-                        [0, 1, 0, 0],
-                        [0, 0, -1, 0],
-                        [0, 0, 0, 1]])
-
-                    mat_yz = np.array([
-                        [-1, 0, 0, 0],
-                        [0, 1, 0, 0],
-                        [0, 0, 1, 0],
-                        [0, 0, 0, 1]])
-
-                    mat_xz = np.array([
-                        [1, 0, 0, 0],
-                        [0, -1, 0, 0],
-                        [0, 0, 1, 0],
-                        [0, 0, 0, 1]])
-
-                    match plane:
-                        case 'XY':
-                            self.shape.transform(mat_xy)
-                        case 'YZ':
-                            self.shape.transform(mat_yz)
-                        case 'XZ':
-                            self.shape.transform(mat_xz)
-                        case _:
-                            mb.showerror("Ошибка", "Неверно указана плоскость")
-                    self.reset(del_shape=False)
-                    self.shape.draw(self.canvas, self.projection)
-                    pg.display.update()
-
-                case Function.ScaleAboutCenter:
-                    inp = sd.askstring("Масштаб", "Введите коэффициенты масштабирования по осям x, y, z:", parent=t)
-                    if inp is None:
-                        return
-                    sx, sy, sz = map(float, inp.split(','))
-                    m, n, k = self.shape.center
-                    mat = np.array([
-                        [sx, 0, 0, -m*sx+m],
-                        [0, sy, 0, -n*sy+n],
-                        [0, 0, sz, -k*sz+k],
-                        [0, 0, 0, 1]])
-                    self.shape.transform(mat)
-                    self.reset(del_shape=False)
-                    self.shape.draw(self.canvas, self.projection)
-                    pg.display.update()
-
-                case Function.RotateAroundAxis:
-                    m, n, k = self.shape.center
-                    inp = sd.askstring("Поворот", "Введите ось вращения (н-р: X), угол в градусах:", parent=t)
-                    if inp is None:
-                        return
-                    try:
-                        axis, phi = inp.split(',')
-                        axis = axis.strip().upper()
-                        phi = radians(float(phi))
-                    except ValueError:
-                        mb.showerror("Ошибка", "Неверно указаны ось и угол")
-                        return
-
-                    mat_back = np.array([
-                        [1, 0, 0, -m],
-                        [0, 1, 0, -n],
-                        [0, 0, 1, -k],
-                        [0, 0, 0, 1]])
-                    self.shape.transform(mat_back)
-
-                    match axis:
-                        case 'X':
-                            mat = np.array([
-                                [1, 0, 0, 0],
-                                [0, cos(phi), -sin(phi), 0],
-                                [0, sin(phi), cos(phi), 0],
-                                [0, 0, 0, 1]])  # вращение вокруг оси x
-                        case 'Z':
-                            mat = np.array([
-                                [cos(phi), -sin(phi), 0, 0],
-                                [sin(phi), cos(phi), 0, 0],
-                                [0, 0, 1, 0],
-                                [0, 0, 0, 1]])  # вращение вокруг оси z
-                        case 'Y':
-                            mat = np.array([
-                                [cos(phi), 0, sin(phi), 0],
-                                [0, 1, 0, 0],
-                                [-sin(phi), 0, cos(phi), 0],
-                                [0, 0, 0, 1]])  # вращение вокруг оси y
-
-                    self.shape.transform(mat)
-                    mat_fwd = np.array([
-                        [1, 0, 0, m],
-                        [0, 1, 0, n],
-                        [0, 0, 1, k],
-                        [0, 0, 0, 1]])
-                    self.shape.transform(mat_fwd)
-                    self.reset(del_shape=False)
-                    self.shape.draw(self.canvas, self.projection)
-                    pg.display.update()
-
-                case Function.RotateAroundLine:
-                    inp = sd.askstring("Поворот", "Введите координаты начала и конца линии в формате x1, y1, z1, x2, y2, z2, угол в градусах:", parent=t)
-                    if inp is None:
-                        return
-                    try:
-                        a, b, c, x, y, z, phi = map(float, inp.split(','))
-                        phi = radians(phi)
-                    except ValueError:
-                        mb.showerror("Ошибка", "Неверно указаны координаты начала и конца линии")
-                        return
-
-                    l = Line(Point(a, b, c), Point(x, y, z))
-
-                    d = np.linalg.norm([x, y, z])
-                    x = x / d
-                    y = y / d
-                    z = z / d
-
-                    mat_back = np.array([
-                        [1, 0, 0, -a],
-                        [0, 1, 0, -b],
-                        [0, 0, 1, -c],
-                        [0, 0, 0, 1]])
-
-                    mat_rot = np.array([
-                        [cos(phi) + (1 - cos(phi)) * x ** 2, (1 - cos(phi)) * x * y - sin(phi)*z, (1 - cos(phi)) * x * z + sin(phi)*y, 0],
-                        [(1 - cos(phi)) * x * y + sin(phi)*z, cos(phi) + (1 - cos(phi)) * y ** 2, (1 - cos(phi)) * y * z - sin(phi)*x, 0],
-                        [(1 - cos(phi)) * z * x - sin(phi)*y, (1 - cos(phi)) * z * y + sin(phi)*x, cos(phi) + (1 - cos(phi)) * z ** 2, 0],
-                        [0, 0, 0, 1]
-                    ])  # 0, 0, 150, 120, 300, -50, 90
-
-                    mat_fwd = np.array([
-                        [1, 0, 0, a],
-                        [0, 1, 0, b],
-                        [0, 0, 1, c],
-                        [0, 0, 0, 1]])
-
-                    mat = mat_fwd @ mat_rot @ mat_back
-                    self.shape.transform(mat)
-                    self.reset(del_shape=False)
-                    l.draw(self.canvas, self.projection, color='orange')
-                    self.shape.draw(self.canvas, self.projection)
-                    pg.display.update()
-            t.destroy()
-
-        t = Thread(target=__thread)
-        t.start()
-        t.join()
-
     def key_pressed(self, event: tk.Event):
         if event.keysym == 'z':
             path = fd.askopenfilename(filetypes=[('Файлы с фигурами', '*.shape')])
@@ -1353,17 +956,6 @@ class App(tk.Tk):
             path = fd.asksaveasfilename(filetypes=[('Файлы с фигурами', '*.shape')])
             if path:
                 self.shape.save(path)
-
-        elif event.keysym == 'f':
-            if ShapeType.FuncPlot:
-                inp = sd.askstring(
-                    "Параметры", "Введите функцию, диапазонамы отсечения [x0, x1] и [y0, y1], количество разбиений по x и y через запятую:")
-                if inp is None:
-                    return
-                func, x0, x1, y0, y1, nx, ny = map(str.strip, inp.split(','))
-                self.shape = FuncPlot(func, float(x0), float(x1), float(y0), float(y1), int(nx), int(ny))
-                self.shape.draw(self.canvas, self.projection)
-                pg.display.update()
 
     def run(self):
         Thread(target=self._pg_mainloop).start()
@@ -1379,8 +971,8 @@ class App(tk.Tk):
                 if e.type == pg.MOUSEBUTTONDOWN:
                     if e.button == 1:
                         self.l_click(e.pos)
-                    elif e.button == 3:
-                        self.r_click(e.pos)
+                    # elif e.button == 3:
+                    #     self.r_click(e.pos)
                 if e.type == pg.KEYDOWN:
                     if e.key == pg.K_w:
                         Camera.is_moving = True
