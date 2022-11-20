@@ -1,17 +1,21 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from math import cos, pi, radians, sin, sqrt, tan
 from tkinter import simpledialog as sd
+from typing import Callable
 
 import numpy as np
 import pygame as pg
 
 # pylint: disable=no-member
 
+
+
 @dataclass
 class Point:
     x: float
     y: float
     z: float
+    vis: bool = field(default=True, init=False)
 
     def __hash__(self) -> int:
         return hash((self.x, self.y, self.z))
@@ -64,11 +68,13 @@ class Point:
         res = np.matmul(coor, lookMat)
         res = np.matmul(res, perMat)
 
-        x = res[0]/(res[3]) + App.W/2
-        y = res[1]/(res[3]) + App.H/2
+        # TODO: fix zero division
+        x = res[0]/res[3] + App.W/2
+        y = res[1]/res[3] + App.H/2
         z = res[2]/res[3]
         if draw_points and not dry_run:
-            surf.set_at((int(x), int(y)), pg.Color(color))
+            # surf.set_at((int(x), int(y)), pg.Color(color))
+            pg.draw.circle(surf, pg.Color(color), (int(x), int(y)), 2)
         return x, y, z
 
     def __iter__(self):
@@ -98,7 +104,6 @@ class Line:
     def transform(self, matrix: np.ndarray):
         self.p1.transform(matrix)
         self.p2.transform(matrix)
-
 
     def __wu(self, canvas: pg.Surface, a: Point, b: Point, color: pg.Color) -> None:
         if a.x > b.x:
@@ -223,40 +228,80 @@ class Camera:
 
 
 class App:
+    SCALE = 100
     W = 800
     H = 600
+    uph: np.ndarray
+    downh: np.ndarray
     surf: pg.Surface
     points: list[Point]
+    n: int
+    func: Callable[[float, float], float]
 
     def __init__(self):
-        n = sd.askinteger("Number of points", "Enter number of points", minvalue=3)
+        n = sd.askinteger("Number of points", "Enter number of points", minvalue=3, initialvalue=10)
         if n is None:
             return
-        func = sd.askstring("Function", "Enter function", initialvalue="z*sin(x)")
+        func = sd.askstring("Function", "Enter function", initialvalue="sin(x) + cos(y)")
         if func is None:
             return
-        func = eval(f"lambda x, z: {func}")
-        self.init_points(n, func)
+        func = eval(f"lambda x, y: {func}")
+        self.func = func
+        self.n = n
 
         self.surf = pg.display.set_mode((App.W, App.H))
-        self.surf.fill('#393939')
         pg.display.set_caption("Floating horizon")
         pg.display.init()
+        self.reset()
+        self.init_points()
+        pg.display.flip()
+        self.draw()
 
-    def init_points(self, n: int, func):
+    def not_on_screen(self, p: Point) -> bool:
+        return p.x < 0 or p.x > App.W or p.y < 0 or p.y > App.H
+
+    def init_points(self):
+        n = self.n
+        func = self.func
         self.points = []
-        for i in range(n):
+        for i in range(n, 0, -1):
+            z = i * self.SCALE
+            prev = Point(0, func(0, z), z)
             for j in range(n):
-                ... # TODO: add points
-                # x = i*100 - (n-1)*50
-                # z = j*100 - (n-1)*50
-                # self.points.append(Point(x, func(x, z), z))
+                x = j * self.SCALE
+                curr = Point(x, func(x, z), z)
+                p = Point(x, self.SCALE*func(x, z), z)
+                _x, _y, _z = p.draw(self.surf, dry_run=True)
+
+                if self.not_on_screen(p):
+                    p.vis = False
+                    continue
+
+                if _y >= self.uph[int(_x) - 1]:
+                    # self.uph[int(p.x)] = p.y
+                    p.vis = True
+
+                if _y <= self.downh[int(_x) - 1]:
+                    # self.downh[int(p.x)] = p.y
+                    p.vis = True
+
+                else:
+                    p.vis = False
+
+                self.points.append(p)
 
     def reset(self):
+        self.uph = np.full((App.W), -np.inf)
+        self.downh = np.full((App.W), np.inf)
         self.surf.fill('#393939')
+
 
     def draw(self):
         self.reset()
+        ln = 100
+        Line(Point(0, 0, 0), Point(ln, 0, 0)).draw(self.surf, color='red')  # x axis
+        Line(Point(0, 0, 0), Point(0, ln, 0)).draw(self.surf, color='green')  # y axis
+        Line(Point(0, 0, 0), Point(0, 0, ln)).draw(self.surf, color='blue')  # z axis
         for point in self.points:
             point.draw(self.surf)
         pg.display.update()
