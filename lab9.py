@@ -301,20 +301,20 @@ class Polygon(Shape):
             LightSource.pos.x-self.points[0].x,
             LightSource.pos.y-self.points[0].y,
             LightSource.pos.z-self.points[0].z])
-        # c.append((normals[0] @ vecToLight) / (mod(normals[0]) * mod(vecToLight)) * color)
-        c.append(color)
+        c.append((normals[0] @ vecToLight) / (mod(normals[0]) * mod(vecToLight)) * color)
+        # c.append(color)
         vecToLight = np.array([
             LightSource.pos.x-self.points[1].x,
             LightSource.pos.y-self.points[1].y,
             LightSource.pos.z-self.points[1].z])
-        # c.append((normals[1] @ vecToLight) / (mod(normals[1]) * mod(vecToLight)) * color)
-        c.append(color)
+        c.append((normals[1] @ vecToLight) / (mod(normals[1]) * mod(vecToLight)) * color)
+        # c.append(color)
         vecToLight = np.array([
             LightSource.pos.x-self.points[2].x,
             LightSource.pos.y-self.points[2].y,
             LightSource.pos.z-self.points[2].z])
-        # c.append((normals[2] @ vecToLight) / (mod(normals[2]) * mod(vecToLight)) * color)
-        c.append(color)
+        c.append((normals[2] @ vecToLight) / (mod(normals[2]) * mod(vecToLight)) * color)
+        # c.append(color)
 
         points = zip([self.points[i].screen_coords(Projection.FreeCamera) for i in range(len(self.points))], c)
         points = sorted(points, key=lambda x: x[0].y)
