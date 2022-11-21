@@ -289,7 +289,13 @@ class Polygon(Shape):
 
     def fill(self, canvas: pg.Surface, color: pg.Color):
         normals = self.triang_normales()
-        # TODO: color intensity
+
+        vecToLight = (np.array(LightSource.pos.x-self.points[0].x,LightSource.pos.y-self.points[0].y,LightSource.pos.z-self.points[0].z))
+        v0 = (normals[0]*vecToLight)/(np.abs(normals[0])*np.abs(vecToLight)) * color
+        vecToLight = (np.array(LightSource.pos.x-self.points[1].x,LightSource.pos.y-self.points[1].y,LightSource.pos.z-self.points[1].z))
+        v1 = (normals[1]*vecToLight)/(np.abs(normals[1])*np.abs(vecToLight)) * color
+        vecToLight = (np.array(LightSource.pos.x-self.points[2].x,LightSource.pos.y-self.points[2].y,LightSource.pos.z-self.points[2].z))
+        v2 = (normals[2]*vecToLight)/(np.abs(normals[2])*np.abs(vecToLight)) * color
         ln = len(self.points)
         tlines = [Line(self.points[i], self.points[(i + 1) % ln])
                   for i in range(ln)]
