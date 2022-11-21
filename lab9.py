@@ -5,6 +5,7 @@ from math import cos, pi, radians, sin, sqrt
 from threading import Thread
 from tkinter import filedialog as fd
 from tkinter import simpledialog as sd
+from PIL import Image
 
 import numpy as np
 import pygame as pg
@@ -298,7 +299,6 @@ class Polygon(Shape):
         # self.draw(canvas, Projection.FreeCamera, color)
         color = np.array(color)
         normals = self.triang_normales()
-        mod = np.linalg.norm
         c = []
 
         vecToLight = np.array([
@@ -307,23 +307,23 @@ class Polygon(Shape):
             LightSource.pos.z-self.points[0].z])
         vecToLight = vecToLight / np.linalg.norm(vecToLight)
         normals[0] = normals[0] / np.linalg.norm(normals[0])
-        c.append( max(0,np.dot(vecToLight,normals[0])) * color)
+        c.append(max(0, np.dot(vecToLight, normals[0])) * color)
         # c.append(color)
         vecToLight = np.array([
             LightSource.pos.x-self.points[1].x,
             LightSource.pos.y-self.points[1].y,
             LightSource.pos.z-self.points[1].z])
         vecToLight = vecToLight / np.linalg.norm(vecToLight)
-        normals[1] = normals[1] / np.linalg.norm(normals[1])       
-        c.append(max(0,np.dot(vecToLight,normals[1])) * color)
+        normals[1] = normals[1] / np.linalg.norm(normals[1])
+        c.append(max(0, np.dot(vecToLight, normals[1])) * color)
         # c.append(color)
         vecToLight = np.array([
             LightSource.pos.x-self.points[2].x,
             LightSource.pos.y-self.points[2].y,
             LightSource.pos.z-self.points[2].z])
         vecToLight = vecToLight / np.linalg.norm(vecToLight)
-        normals[2] = normals[2] / np.linalg.norm(normals[2])        
-        c.append(max(0,np.dot(vecToLight,normals[2])) * color)
+        normals[2] = normals[2] / np.linalg.norm(normals[2])
+        c.append(max(0, np.dot(vecToLight, normals[2])) * color)
         # c.append(color)
 
         points = zip([self.points[i].screen_coords(Projection.FreeCamera) for i in range(len(self.points))], c)
@@ -411,6 +411,15 @@ class Polygon(Shape):
     #             for x in range(int(intersections[i].x), int(intersections[i+1].x)):
     #                 cz = z[x-int(intersections[i].x)]
     #                 ZBuffer.draw_point(canvas, x, y, cz, color)
+    def get_tex(self, x, y) -> np.ndarray:
+        tex = App.texture
+        if 0 <= x < tex.shape[1] and 0 <= y < tex.shape[0]:
+            return tex[y, x]
+
+    def get_tex_p(self, p: Point) -> np.ndarray:
+        tex = App.texture
+        if 0 <= p.x < tex.shape[1] and 0 <= p.y < tex.shape[0]:
+            return tex[int(p.y), int(p.x)]
 
     def transform(self, matrix: np.ndarray):
         for point in self.points:
@@ -752,6 +761,7 @@ class App(tk.Tk):
     dist: int = 1000
     bfc: tk.BooleanVar
     zbuf: tk.BooleanVar
+    texture: np.ndarray
 
     def __init__(self):
         super().__init__()
@@ -763,6 +773,13 @@ class App(tk.Tk):
         self.projection_idx = 0
         self.projection = Projection(self.projection_idx)
         self.create_widgets()
+        try:
+            image = Image.open("texture.jpg").convert("RGB")
+            App.texture = np.array(image)
+            print(f"Texture loaded, size {self.texture.shape}")
+        except FileNotFoundError:
+            App.texture = None
+            print("Texture not found")
         pg.display.set_caption("Viewport")
         pg.init()
 
