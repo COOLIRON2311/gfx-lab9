@@ -327,7 +327,7 @@ class Polygon(Shape):
         hleft = p3.y - p1.y
         hright = p2.y - p1.y
 
-        for y in range(int(p1.y), int(p3.y)):
+        for y in range(int(p1.y), int(p2.y)):
             tl = 0 if hleft == 0 else (y - p1.y) / hleft
             tr = 0 if hright == 0 else (y - p3.y) / hright
             cl = self.col_interp(c1, c3, tl)
@@ -364,7 +364,7 @@ class Polygon(Shape):
             if xl > xr:
                 xl, xr = xr, xl
                 cl, cr = cr, cl
-            z = self.interpolate(xl, p1.z, xr, p2.z)
+            z = self.interpolate(xl, l1.get_z(y), xr,  l2.get_z(y))
             for x in range(int(xl), int(xr)):
                 # TODO: bullshit
                 # z = self.interpolate(xl, p1.z, xr, p3.z)[x-int(xl)]
