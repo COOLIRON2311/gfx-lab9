@@ -88,13 +88,6 @@ class Point:
         yield self.y
         yield self.z
 
-    def transform(self, matrix: np.ndarray):
-        p = np.array([self.x, self.y, self.z, 1])
-        p = np.dot(matrix, p)
-        self.x = p[0]
-        self.y = p[1]
-        self.z = p[2]
-
     def not_on_screen(self) -> bool:
         return not (0 <= self.x < App.W and 0 <= self.y < App.H)
 
@@ -107,49 +100,9 @@ class Line:
     def draw(self, canvas: pg.Surface, color: str = 'white', draw_points: bool = False):
         # p1.draw(canvas, color, draw_points)
         # p2.draw(canvas, color, draw_points)
-        self.__wu(canvas, self.p1, self.p2, pg.Color(color))
+        # self.__wu(canvas, self.p1, self.p2, pg.Color(color))
+        pg.draw.line(canvas, pg.Color(color), (self.p1.x, self.p1.y), (self.p2.x, self.p2.y))
         return self.p1, self.p2
-
-    def transform(self, matrix: np.ndarray):
-        self.p1.transform(matrix)
-        self.p2.transform(matrix)
-
-    def __wu(self, canvas: pg.Surface, a: Point, b: Point, color: pg.Color) -> None:
-        if a.x > b.x:
-            a, b = b, a
-
-        dx = b.x - a.x
-        dy = b.y - a.y
-
-        if dx == 0:
-            if a.y > b.y:
-                a, b = b, a
-            for y in range(int(a.y), int(b.y)):
-                canvas.set_at((int(a.x), y), color)
-            return
-
-        gradient = dy/dx
-
-        y = a.y+gradient
-
-        if abs(gradient) < 1:
-            if a.x > b.x:
-                a, b = b, a
-
-            for i in range(int(a.x), int(b.x)):
-                canvas.set_at((i, int(y)), color)
-                canvas.set_at((i, int(y+1)), color)
-                y += gradient
-        else:
-            if a.y > b.y:
-                a, b = b, a
-            gradient2 = dx/dy
-            x = a.x + gradient2
-            for i in range(int(a.y), int(b.y)):
-                canvas.set_at((int(x), i), color)
-                canvas.set_at((int(x+1), i), color)
-                x += gradient2
-
 
 class Camera:
     is_moving = False
@@ -237,7 +190,7 @@ class Camera:
 
 
 class App:
-    SCALE = 100
+    SCALE = 50
     W = 800
     H = 600
     uph: np.ndarray
@@ -248,7 +201,7 @@ class App:
     func: Callable[[float, float], float]
 
     def __init__(self):
-        n = sd.askinteger("Number of points", "Enter number of points", minvalue=3, initialvalue=10)
+        n = sd.askinteger("Number of points", "Enter number of points", minvalue=3, initialvalue=20)
         if n is None:
             return
         func = sd.askstring("Function", "Enter function", initialvalue="sin(x) + cos(y)")
@@ -296,10 +249,11 @@ class App:
                 self.downh[i] = min(self.downh[i], y)
 
     def intersect(self, p1: Point, p2: Point, reverse: bool = False) -> Point:
-        xstep = (p2.x - p1.x) / 20
-        ystep = (p2.y - p1.y) / 20
+        d = 20
+        xstep = (p2.x - p1.x) / d
+        ystep = (p2.y - p1.y) / d
 
-        for i in range(20):
+        for i in range(d):
             p = Point(p1.x + xstep * i, p1.y + ystep * i, 0)
             self.process_point(p)
             if reverse and p.vis:
@@ -307,11 +261,6 @@ class App:
             elif not reverse and not p.vis:
                 return p
         return p2
-        # if p1.x == p2.x:
-        #     return Point(p1.x, self.uph[int(p1.x)], 0)
-        # gradient = (p2.y - p1.y) / (p2.x - p1.x)
-        # x = p1.x + gradient * (self.uph[int(p1.x)] - p1.y)
-        # return Point(x, self.uph[int(p1.x)], 0)
 
     def calc_points(self):
         n = self.n
@@ -324,27 +273,20 @@ class App:
 
             for j in range(n):
                 x = j * self.SCALE
-                # curr = Point(x, func(x, z), z)
                 curr = Point(x, self.SCALE*func(x, z), z).screen_coords()
                 self.process_point(curr)
                 if curr.vis:
                     if prev.vis:
                         Line(prev, curr).draw(self.surf)
-                        # self.points.append(prev)
-                        # self.points.append(curr)
                         self.update_horizon(curr, prev)
                     else:
-                        r = self.intersect(prev, curr)
+                        r = self.intersect(prev, curr, reverse=False)
                         Line(r, curr).draw(self.surf)
-                        # self.points.append(r)
-                        # self.points.append(curr)
                         self.update_horizon(curr, r)
                 else:
                     if prev.vis:
-                        r = self.intersect(prev, curr)
+                        r = self.intersect(prev, curr, reverse=True)
                         Line(prev, r).draw(self.surf)
-                        # self.points.append(prev)
-                        # self.points.append(r)
                         self.update_horizon(r, prev)
                 prev = curr
 
@@ -356,18 +298,10 @@ class App:
     def draw(self):
         self.reset()
         self.calc_points()
-        ln = 100
-        Line(Point(0, 0, 0), Point(ln, 0, 0)).draw(self.surf, color='red')  # x axis
-        Line(Point(0, 0, 0), Point(0, ln, 0)).draw(self.surf, color='green')  # y axis
-        Line(Point(0, 0, 0), Point(0, 0, ln)).draw(self.surf, color='blue')  # z axis
-        # for i in range(self.n):
-        #     for j in range(self.n-1):
-        # #         Line(self.points[i*self.n + j], self.points[i*self.n + j + 1]).draw(self.surf)
-        # for point in self.points:
-        #     if point.vis:
-        #         point.draw(self.surf)
-        #     else:
-        #         point.draw(self.surf, color='red')
+        # ln = 100
+        # Line(Point(0, 0, 0), Point(ln, 0, 0)).draw(self.surf, color='red')  # x axis
+        # Line(Point(0, 0, 0), Point(0, ln, 0)).draw(self.surf, color='green')  # y axis
+        # Line(Point(0, 0, 0), Point(0, 0, ln)).draw(self.surf, color='blue')  # z axis
         pg.display.update()
 
     def run(self):
