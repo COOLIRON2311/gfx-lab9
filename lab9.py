@@ -16,6 +16,7 @@ from enums import Projection, ShapeType
 # pylint: disable=eval-used
 # pylint: disable=too-many-instance-attributes
 # pylint: disable=too-many-lines
+# pylint: disable=consider-using-enumerate
 
 
 class Shape:
@@ -292,39 +293,17 @@ class Polygon(Shape):
     def col_interp(self, c1: np.ndarray, c2: np.ndarray, t: float) -> np.ndarray:
         return c1 + t * (c2 - c1)
 
-    def vecAbs(self, vec):
-        return np.sqrt(vec[0]**2+vec[1]**2+vec[2]**2)
-
     def fill(self, canvas: pg.Surface, color: pg.Color):
-        # self.draw(canvas, Projection.FreeCamera, color)
         color = np.array(color)
-        normals = self.triang_normales()
+        normal = np.array(self.normal)
         c = []
-
-        vecToLight = np.array([
-            LightSource.pos.x-self.points[0].x,
-            LightSource.pos.y-self.points[0].y,
-            LightSource.pos.z-self.points[0].z])
-        vecToLight = vecToLight / np.linalg.norm(vecToLight)
-        normals[0] = normals[0] / np.linalg.norm(normals[0])
-        c.append(max(0, np.dot(vecToLight, normals[0])) * color)
-        # c.append(color)
-        vecToLight = np.array([
-            LightSource.pos.x-self.points[1].x,
-            LightSource.pos.y-self.points[1].y,
-            LightSource.pos.z-self.points[1].z])
-        vecToLight = vecToLight / np.linalg.norm(vecToLight)
-        normals[1] = normals[1] / np.linalg.norm(normals[1])
-        c.append(max(0, np.dot(vecToLight, normals[1])) * color)
-        # c.append(color)
-        vecToLight = np.array([
-            LightSource.pos.x-self.points[2].x,
-            LightSource.pos.y-self.points[2].y,
-            LightSource.pos.z-self.points[2].z])
-        vecToLight = vecToLight / np.linalg.norm(vecToLight)
-        normals[2] = normals[2] / np.linalg.norm(normals[2])
-        c.append(max(0, np.dot(vecToLight, normals[2])) * color)
-        # c.append(color)
+        for i in range(len(self.points)):
+            vecToLight = np.array([
+                LightSource.pos.x-self.points[i].x,
+                LightSource.pos.y-self.points[i].y,
+                LightSource.pos.z-self.points[i].z])
+            vecToLight = vecToLight / np.linalg.norm(vecToLight)
+            c.append(max(0, np.dot(vecToLight, normal)) * color)
 
         points = zip([self.points[i].screen_coords(Projection.FreeCamera) for i in range(len(self.points))], c)
         points = sorted(points, key=lambda x: x[0].y)
@@ -439,19 +418,11 @@ class Polygon(Shape):
         p1 = np.array(self.points[0])
         p2 = np.array(self.points[1])
         p3 = np.array(self.points[2])
-        v1 = p1 - p2
-        v2 = p3 - p2
-        normal = np.cross(v2, v1)
-        return Point(normal[0], normal[1], normal[2])
-
-    def triang_normales(self) -> list[np.ndarray]:
-        res = []
-        ln = len(self.points)
-        for i in range(0, ln):
-            v1 = np.array(self.points[(i-1) % ln]) - np.array(self.points[i % ln])
-            v2 = np.array(self.points[(i+1) % ln]) - np.array(self.points[i % ln])
-            res.append(np.cross(v1, v2))
-        return res
+        v1 = p2 - p1
+        v2 = p3 - p1
+        n = np.cross(v2, v1)
+        d = np.linalg.norm(n)
+        return Point(n[0] / d, n[1] / d, n[2] / d)
 
 
 @dataclass
@@ -1034,8 +1005,8 @@ class App(tk.Tk):
             pg.display.update()
 
     def __draw_ls(self):
-        ls = LightSource
-        x, y, z = ls.pos
+        ls = LightSource.pos
+        x, y, z = -ls.x, -ls.y, -ls.z
         x, y, z = Point(x, y, z).screen_coords(self.projection)
         pg.draw.circle(self.canvas, pg.Color('white'), (x, y), 5)
 
