@@ -343,6 +343,15 @@ class Polygon(Shape):
         normal = np.cross(v2, v1)
         return Point(normal[0], normal[1], normal[2])
 
+    def triang_normales(self) -> list[np.ndarray]:
+        res = []
+        ln = len(self.points)
+        for i in range(2, ln):
+            v1 = np.array(self.points[(i-1) % ln]) - np.array(self.points[i % ln])
+            v2 = np.array(self.points[(i+1) % ln]) - np.array(self.points[i % ln])
+            res.append(np.cross(v1, v2))
+        return res
+
 
 @dataclass
 class Polyhedron(Shape):
@@ -489,6 +498,8 @@ class Camera:
         n = np.linalg.norm(f)
         Camera.camFront = f/n
 
+class LightSource:
+    pos: Point = Point(200, 200, 0)
 
 class Models:
     """
