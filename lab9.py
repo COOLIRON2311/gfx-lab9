@@ -264,22 +264,21 @@ class Polygon(Shape):
             line.draw(canvas, projection, color, draw_points)
         # self.normal.draw(canvas, projection, 'red', draw_points=True)
 
-    def interpolate(self, x1, z1, x2, z2, t):
-        # res = []
+    def interpolate(self, x1, z1, x2, z2):
+        res = []
 
-        # d = abs(int(x2)-int(x1))
-        # if d < 0.001:
-        #     res.append(z1)
-        #     return res
+        d = abs(int(x2)-int(x1))
+        if d < 0.001:
+            res.append(z1)
+            return res
 
         step = (z2-z1) / (x2-x1)
-        return step * t + z1
 
-        # for _ in np.arange(x1, x2):
-        #     res.append(z1)
-        #     z1 += step
+        for _ in np.arange(x1, x2):
+            res.append(z1)
+            z1 += step
 
-        # return res
+        return res
 
     def triangulate(self):
         if len(self.points) == 3:
@@ -337,16 +336,17 @@ class Polygon(Shape):
             if xl > xr:
                 xl, xr = xr, xl
                 cl, cr = cr, cl
+            z = self.interpolate(xl, l1.get_z(y), xr, l2.get_z(y))
             for x in range(int(xl), int(xr)):
                 # TODO: bullshit
                 # z = self.interpolate(xl, p1.z, xr, p2.z)[x-int(xl)]
                 t = 0 if xr == xl else (x - xl) / (xr - xl)
-                z = self.interpolate(xl, p1.z, xr, p2.z, t)
+                #z = self.interpolate(xl, p1.z, xr, p2.z, t)
                 cx = self.col_interp(cl, cr, t)
                 # canvas.set_at((x, y), cx)
                 try:
                     col = pg.Color(int(cx[0]), int(cx[1]), int(cx[2]))
-                    ZBuffer.draw_point(canvas, x, y, z, col)
+                    ZBuffer.draw_point(canvas, x, y, z[x-int(xl)], col)
                 except ValueError:
                     pass
         l1 = Line(p1, p3)
@@ -364,16 +364,17 @@ class Polygon(Shape):
             if xl > xr:
                 xl, xr = xr, xl
                 cl, cr = cr, cl
+            z = self.interpolate(xl, p1.z, xr, p2.z)
             for x in range(int(xl), int(xr)):
                 # TODO: bullshit
                 # z = self.interpolate(xl, p1.z, xr, p3.z)[x-int(xl)]
                 t = 0 if xr == xl else (x - xl) / (xr - xl)
-                z = self.interpolate(xl, p1.z, xr, p3.z, t)
+                #z = self.interpolate(xl, p1.z, xr, p3.z, t)
                 cx = self.col_interp(cl, cr, t)
                 # canvas.set_at((x, y), cx)
                 try:
                     col = pg.Color(int(cx[0]), int(cx[1]), int(cx[2]))
-                    ZBuffer.draw_point(canvas, x, y, z, col)
+                    ZBuffer.draw_point(canvas, x, y, z[x-int(xl)], col)
                 except ValueError:
                     pass
     # def fill(self, canvas: pg.Surface, color: pg.Color):
