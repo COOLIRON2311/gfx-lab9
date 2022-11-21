@@ -16,6 +16,7 @@ from enums import Projection, ShapeType
 # pylint: disable=too-many-instance-attributes
 # pylint: disable=too-many-lines
 
+
 class Shape:
     """Base class for all shapes"""
 
@@ -287,39 +288,85 @@ class Polygon(Shape):
             res.append(Polygon([self.points[0], self.points[i-1], self.points[i]]))
         return res
 
+    def col_interp(self, c1: np.ndarray, c2: np.ndarray, t: float) -> np.ndarray:
+        return c1 + t * (c2 - c1)
+
     def fill(self, canvas: pg.Surface, color: pg.Color):
         normals = self.triang_normales()
+        mod = np.linalg.norm
+        c = []
 
-        vecToLight = (np.array(LightSource.pos.x-self.points[0].x,LightSource.pos.y-self.points[0].y,LightSource.pos.z-self.points[0].z))
-        v0 = (normals[0]*vecToLight)/(np.abs(normals[0])*np.abs(vecToLight)) * color
-        vecToLight = (np.array(LightSource.pos.x-self.points[1].x,LightSource.pos.y-self.points[1].y,LightSource.pos.z-self.points[1].z))
-        v1 = (normals[1]*vecToLight)/(np.abs(normals[1])*np.abs(vecToLight)) * color
-        vecToLight = (np.array(LightSource.pos.x-self.points[2].x,LightSource.pos.y-self.points[2].y,LightSource.pos.z-self.points[2].z))
-        v2 = (normals[2]*vecToLight)/(np.abs(normals[2])*np.abs(vecToLight)) * color
-        ln = len(self.points)
-        tlines = [Line(self.points[i], self.points[(i + 1) % ln])
-                  for i in range(ln)]
-        lines: list[Line] = []
-        points: set[Point] = set()
-        for l in tlines:
-            p1, p2 = l.draw(canvas, Projection.FreeCamera)
-            lines.append(Line(p1, p2))
-            points.add(p1)
-            points.add(p2)
-        ymax = max(p.y for p in points)
-        ymin = min(p.y for p in points)
+        vecToLight = np.array([
+            LightSource.pos.x-self.points[0].x,
+            LightSource.pos.y-self.points[0].y,
+            LightSource.pos.z-self.points[0].z])
+        c.append((normals[0] @ vecToLight) / (mod(normals[0]) * mod(vecToLight)) * color)
+        vecToLight = np.array([
+            LightSource.pos.x-self.points[1].x,
+            LightSource.pos.y-self.points[1].y,
+            LightSource.pos.z-self.points[1].z])
+        c.append((normals[1] @ vecToLight) / (mod(normals[1]) * mod(vecToLight)) * color)
+        vecToLight = np.array([
+            LightSource.pos.x-self.points[2].x,
+            LightSource.pos.y-self.points[2].y,
+            LightSource.pos.z-self.points[2].z])
+        c.append((normals[2] @ vecToLight) / (mod(normals[2]) * mod(vecToLight)) * color)
 
-        for y in range(int(ymin), int(ymax)):
-            intersections: list[Point] = []
-            for line in lines:
-                if line.p1.y <= y < line.p2.y or line.p2.y <= y < line.p1.y:
-                    intersections.append(Point(line.get_x(y), y, line.get_z(y)))
-            intersections.sort(key=lambda p: p.x)
-            for i in range(0, len(intersections), 2):
-                z = self.interpolate(intersections[i].x, intersections[i].z, intersections[i+1].x, intersections[i+1].z)
-                for x in range(int(intersections[i].x), int(intersections[i+1].x)):
-                    cz = z[x-int(intersections[i].x)]
-                    ZBuffer.draw_point(canvas, x, y, cz, color)
+        points = zip([self.points[i].screen_coords(Projection.FreeCamera) for i in range(len(self.points))], c)
+        points = sorted(points, key=lambda x: x[0].y)
+        p1: Point
+        p2: Point
+        p3: Point
+        p1, p2, p3 = points[0][0], points[1][0], points[2][0]
+        c1, c2, c3 = points[0][1], points[1][1], points[2][1]
+
+        l1 = Line(p1, p2)
+        l2 = Line(p1, p3)
+
+        hleft = p3.y - p1.y
+        hright = p2.y - p1.y
+
+        for y in range(int(p1.y), int(p3.y)):
+            tl = 0 if hleft == 0 else (y - p1.y) / hleft
+            tr = 0 if hright == 0 else (y - p1.y) / hright
+            cl = self.col_interp(c1, c3, tl)
+            cr = self.col_interp(c1, c2, tr)
+            xl, xr = l1.get_x(y), l2.get_x(y)
+            if xl > xr:
+                xl, xr = xr, xl
+                cl, cr = cr, cl
+            for x in range(int(xl), int(xr)):
+                # TODO: bullshit
+                z = self.interpolate(xl, p1.z, xr, p2.z)[x-int(xl)]
+                t = 0 if xr == xl else (x - xl) / (xr - xl)
+                cx = self.col_interp(cl, cr, t)
+                # canvas.set_at((x, y), cx)
+                col = pg.Color(int(cx[0]), int(cx[1]), int(cx[2]))
+                ZBuffer.draw_point(canvas, x, y, z, col)
+
+        l1 = Line(p1, p3)
+        l2 = Line(p2, p3)
+
+        hleft = p3.y - p1.y
+        hright = p3.y - p2.y
+
+        for y in range(int(p2.y), int(p3.y)):
+            tl = 0 if hleft == 0 else (y - p1.y) / hleft
+            tr = 0 if hright == 0 else (y - p2.y) / hright
+            cl = self.col_interp(c1, c3, tl)
+            cr = self.col_interp(c2, c3, tr)
+            xl, xr = l1.get_x(y), l2.get_x(y)
+            if xl > xr:
+                xl, xr = xr, xl
+                cl, cr = cr, cl
+            for x in range(int(xl), int(xr)):
+                # TODO: bullshit
+                z = self.interpolate(xl, p1.z, xr, p3.z)[x-int(xl)]
+                t = 0 if xr == xl else (x - xl) / (xr - xl)
+                cx = self.col_interp(cl, cr, t)
+                # canvas.set_at((x, y), cx)
+                col = pg.Color(int(cx[0]), int(cx[1]), int(cx[2]))
+                ZBuffer.draw_point(canvas, x, y, z, col)
 
     # def fill(self, canvas: pg.Surface, color: pg.Color):
     #     ln = len(self.points)
@@ -373,7 +420,7 @@ class Polygon(Shape):
     def triang_normales(self) -> list[np.ndarray]:
         res = []
         ln = len(self.points)
-        for i in range(2, ln):
+        for i in range(0, ln):
             v1 = np.array(self.points[(i-1) % ln]) - np.array(self.points[i % ln])
             v2 = np.array(self.points[(i+1) % ln]) - np.array(self.points[i % ln])
             res.append(np.cross(v1, v2))
@@ -525,8 +572,10 @@ class Camera:
         n = np.linalg.norm(f)
         Camera.camFront = f/n
 
+
 class LightSource:
     pos: Point = Point(200, 200, 0)
+
 
 class Models:
     """
@@ -942,7 +991,7 @@ class App(tk.Tk):
                 self.shape = Models.Dodecahedron()
         if self.shape is not None:
             if App.zbuf.get():
-                self.__temp_model()
+                # self.__temp_model()
                 self.shape.fill(self.canvas, pg.Color('green'))
             else:
                 self.shape.draw(self.canvas, self.projection)
@@ -1057,7 +1106,7 @@ class App(tk.Tk):
                 self.reset(del_shape=False)
                 if self.shape is not None:
                     if App.zbuf.get():
-                        self.__temp_model()
+                        # self.__temp_model()
                         if isinstance(self.shape, Polyhedron):
                             self.shape.fill(self.canvas, pg.Color('green'))
                     else:
