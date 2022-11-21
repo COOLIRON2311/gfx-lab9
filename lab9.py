@@ -1,5 +1,5 @@
 import tkinter as tk
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, InitVar
 from enum import Enum
 from math import cos, pi, radians, sin, sqrt
 from threading import Thread
@@ -286,6 +286,14 @@ class Polygon(Shape):
 
         return res
 
+    def triangulate(self):
+        if len(self.points) == 3:
+            return [self]
+        res = []
+        for i in range(2, len(self.points)):
+            res.append(Polygon([self.points[0], self.points[i-1], self.points[i]]))
+        return res
+
     def fill(self, canvas: pg.Surface, color: pg.Color):
         ln = len(self.points)
         tlines = [Line(self.points[i], self.points[(i + 1) % ln])
@@ -339,6 +347,17 @@ class Polygon(Shape):
 @dataclass
 class Polyhedron(Shape):
     polygons: list[Polygon]
+    _triangulate: InitVar[bool] = field(default=True)
+
+    def __post_init__(self, _triangulate):
+        if _triangulate:
+            polys = []
+            for poly in self.polygons:
+                polys.extend(poly.triangulate())
+            self.polygons = polys
+
+            for poly in self.polygons:
+                poly.normal = poly.calculate_normal()
 
     def draw(self, canvas: pg.Surface, projection: Projection, color: str = 'white', draw_points: bool = False):
         bfc: bool = App.bfc.get()
@@ -481,7 +500,7 @@ class Models:
     """
     class Tetrahedron(Polyhedron):
         def __init__(self, size=100):
-            t = Models.Hexahedron(size)
+            t = Models.Hexahedron(size, False)
             p1 = t.polygons[0].points[1]
             p2 = t.polygons[0].points[3]
             p3 = t.polygons[2].points[2]
@@ -498,7 +517,7 @@ class Models:
             return super().__repr__().replace('Models.Tetrahedron', 'Polyhedron')
 
     class Hexahedron(Polyhedron):
-        def __init__(self, size=100):
+        def __init__(self, size=100, triangulate=True):
             p1 = Point(0, 0, 0)
             p2 = Point(size, 0, 0)
             p3 = Point(size, size, 0)
@@ -515,7 +534,7 @@ class Models:
                 Polygon([p4, p1, p5, p8]),
                 Polygon([p5, p6, p7, p8])
             ]
-            super().__init__(polygons)
+            super().__init__(polygons, triangulate)
 
         def __repr__(self) -> str:
             return super().__repr__().replace('Models.Hexahedron', 'Polyhedron')
