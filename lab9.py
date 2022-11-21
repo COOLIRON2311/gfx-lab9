@@ -145,7 +145,8 @@ class Point(Shape):
 
     def draw(self, canvas: pg.Surface, projection: Projection, color: str = 'white', draw_points: bool = True):
         if draw_points and self.x < 1000 and self.y < 1000:
-            canvas.set_at((int(self.x), int(self.y)), pg.Color(color))
+            coord = self.screen_coords(projection)
+            canvas.set_at((int(coord.x), int(coord.y)), pg.Color(color))
 
     def __iter__(self):
         yield self.x
