@@ -65,7 +65,6 @@ class Point(Shape):
         return np.array([self.x, self.y, self.z])
 
     def createLookMat(self, camTarget, upVec):
-        # print("LookMat")
         camDir = np.array([Camera.position.x, Camera.position.y, Camera.position.z]) - camTarget
         camDir = camDir / np.linalg.norm(camDir)
         camRight = np.cross(upVec, camDir)
@@ -77,20 +76,17 @@ class Point(Shape):
             [camDir[0], camDir[1], camDir[2], 0],
             [0, 0, 0, 1]
         ])
-        #mat1 = mat1.T
         mat2 = np.array([
             [1, 0, 0, -Camera.position.x],
             [0, 1, 0, -Camera.position.y],
             [0, 0, 1, -Camera.position.z],
             [0, 0, 0, 1]
         ])
-        #mat2 = mat2.T
         lookMat = np.matmul(mat1, mat2)
         return lookMat
 
-    def draw(self, canvas: pg.Surface, projection: Projection, color: str = 'white', draw_points: bool = True, dry_run=False):
+    def screen_coords(self, projection: Projection) -> 'Point':
         if projection == Projection.Perspective:
-            # print(App.dist)
             per = np.array([
                 [1, 0, 0, 0],
                 [0, 1, 0, 0],
@@ -103,7 +99,6 @@ class Point(Shape):
             z = res[2]/res[3]
 
         elif projection == Projection.Axonometric:
-            #print(App.phi, App.theta)
             phi = App.phi*(pi/180)
             theta = App.theta*(pi/180)
             iso = np.array([
@@ -118,8 +113,6 @@ class Point(Shape):
             z = res[2]
 
         elif projection == Projection.FreeCamera:
-            # print("camera")
-            # print(Camera.position)
             lookMat = self.createLookMat(np.array([Camera.position.x, Camera.position.y, Camera.position.z]) +
                                          Camera.camFront, np.array([0.0, 1.0, 0.0]))
             lookMat = lookMat.T
@@ -145,9 +138,11 @@ class Point(Shape):
             x = self.x
             y = self.y
             z = self.z
-        if draw_points and x < 1000 and y < 1000 and not dry_run:
-            canvas.set_at((int(x), int(y)), pg.Color(color))
-        return x, y, z
+        return Point(x, y, z)
+
+    def draw(self, canvas: pg.Surface, projection: Projection, color: str = 'white', draw_points: bool = True):
+        if draw_points and self.x < 1000 and self.y < 1000:
+            canvas.set_at((int(self.x), int(self.y)), pg.Color(color))
 
     def __iter__(self):
         yield self.x
@@ -181,12 +176,10 @@ class Line(Shape):
     p2: Point
 
     def draw(self, canvas: pg.Surface, projection: Projection, color: str = 'white', draw_points: bool = False):
-        p1X, p1Y, p1Z = self.p1.draw(canvas, projection, color, draw_points)
-        p2X, p2Y, p2Z = self.p2.draw(canvas, projection, color, draw_points=draw_points)
+        p1X, p1Y, p1Z = self.p1.screen_coords(projection)
+        p2X, p2Y, p2Z = self.p2.screen_coords(projection)
         self.__wu(canvas, Point(p1X, p1Y, p1Z), Point(p2X, p2Y, p2Z), pg.Color(color))
         return Point(p1X, p1Y, p1Z), Point(p2X, p2Y, p2Z)
-        # pg.draw.line(canvas, pg.Color(color), (p1X, p1Y), (p2X, p2Y))
-        # canvas.create_line(p1X, p1Y, p2X, p2Y, fill=color)
 
     def transform(self, matrix: np.ndarray):
         self.p1.transform(matrix)
@@ -295,6 +288,8 @@ class Polygon(Shape):
         return res
 
     def fill(self, canvas: pg.Surface, color: pg.Color):
+        normals = self.triang_normales()
+        # TODO: color intensity
         ln = len(self.points)
         tlines = [Line(self.points[i], self.points[(i + 1) % ln])
                   for i in range(ln)]
@@ -319,6 +314,32 @@ class Polygon(Shape):
                 for x in range(int(intersections[i].x), int(intersections[i+1].x)):
                     cz = z[x-int(intersections[i].x)]
                     ZBuffer.draw_point(canvas, x, y, cz, color)
+
+    # def fill(self, canvas: pg.Surface, color: pg.Color):
+    #     ln = len(self.points)
+    #     tlines = [Line(self.points[i], self.points[(i + 1) % ln])
+    #               for i in range(ln)]
+    #     lines: list[Line] = []
+    #     points: set[Point] = set()
+    #     for l in tlines:
+    #         p1, p2 = l.draw(canvas, Projection.FreeCamera)
+    #         lines.append(Line(p1, p2))
+    #         points.add(p1)
+    #         points.add(p2)
+    #     ymax = max(p.y for p in points)
+    #     ymin = min(p.y for p in points)
+
+    #     for y in range(int(ymin), int(ymax)):
+    #         intersections: list[Point] = []
+    #         for line in lines:
+    #             if line.p1.y <= y < line.p2.y or line.p2.y <= y < line.p1.y:
+    #                 intersections.append(Point(line.get_x(y), y, line.get_z(y)))
+    #         intersections.sort(key=lambda p: p.x)
+    #         for i in range(0, len(intersections), 2):
+    #             z = self.interpolate(intersections[i].x, intersections[i].z, intersections[i+1].x, intersections[i+1].z)
+    #             for x in range(int(intersections[i].x), int(intersections[i+1].x)):
+    #                 cz = z[x-int(intersections[i].x)]
+    #                 ZBuffer.draw_point(canvas, x, y, cz, color)
 
     def transform(self, matrix: np.ndarray):
         for point in self.points:
