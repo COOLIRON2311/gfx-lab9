@@ -292,7 +292,7 @@ class Polygon(Shape):
         return c1 + t * (c2 - c1)
 
     def fill(self, canvas: pg.Surface, color: pg.Color):
-        self.draw(canvas, Projection.FreeCamera, color)
+        # self.draw(canvas, Projection.FreeCamera, color)
         normals = self.triang_normales()
         mod = np.linalg.norm
         c = []
@@ -301,17 +301,20 @@ class Polygon(Shape):
             LightSource.pos.x-self.points[0].x,
             LightSource.pos.y-self.points[0].y,
             LightSource.pos.z-self.points[0].z])
-        c.append((normals[0] @ vecToLight) / (mod(normals[0]) * mod(vecToLight)) * color)
+        # c.append((normals[0] @ vecToLight) / (mod(normals[0]) * mod(vecToLight)) * color)
+        c.append(color)
         vecToLight = np.array([
             LightSource.pos.x-self.points[1].x,
             LightSource.pos.y-self.points[1].y,
             LightSource.pos.z-self.points[1].z])
-        c.append((normals[1] @ vecToLight) / (mod(normals[1]) * mod(vecToLight)) * color)
+        # c.append((normals[1] @ vecToLight) / (mod(normals[1]) * mod(vecToLight)) * color)
+        c.append(color)
         vecToLight = np.array([
             LightSource.pos.x-self.points[2].x,
             LightSource.pos.y-self.points[2].y,
             LightSource.pos.z-self.points[2].z])
-        c.append((normals[2] @ vecToLight) / (mod(normals[2]) * mod(vecToLight)) * color)
+        # c.append((normals[2] @ vecToLight) / (mod(normals[2]) * mod(vecToLight)) * color)
+        c.append(color)
 
         points = zip([self.points[i].screen_coords(Projection.FreeCamera) for i in range(len(self.points))], c)
         points = sorted(points, key=lambda x: x[0].y)
@@ -321,29 +324,27 @@ class Polygon(Shape):
         p1, p2, p3 = points[0][0], points[1][0], points[2][0]
         c1, c2, c3 = points[0][1], points[1][1], points[2][1]
 
-        l1 = Line(p1, p2)
-        l2 = Line(p1, p3)
+        l1 = Line(p1, p3)
+        l2 = Line(p1, p2)
 
         hleft = p3.y - p1.y
         hright = p2.y - p1.y
 
         for y in range(int(p1.y), int(p2.y)):
             tl = 0 if hleft == 0 else (y - p1.y) / hleft
-            tr = 0 if hright == 0 else (y - p3.y) / hright
+            tr = 0 if hright == 0 else (y - p1.y) / hright
             cl = self.col_interp(c1, c3, tl)
             cr = self.col_interp(c1, c2, tr)
             xl, xr = l1.get_x(y), l2.get_x(y)
+            zl, zr = l1.get_z(y), l2.get_z(y)
             if xl > xr:
                 xl, xr = xr, xl
                 cl, cr = cr, cl
-            z = self.interpolate(xl, l1.get_z(y), xr, l2.get_z(y))
+                zl, zr = zr, zl
+            z = self.interpolate(xl, zl, xr, zr)
             for x in range(int(xl), int(xr)):
-                # TODO: bullshit
-                # z = self.interpolate(xl, p1.z, xr, p2.z)[x-int(xl)]
                 t = 0 if xr == xl else (x - xl) / (xr - xl)
-                #z = self.interpolate(xl, p1.z, xr, p2.z, t)
                 cx = self.col_interp(cl, cr, t)
-                # canvas.set_at((x, y), cx)
                 try:
                     col = pg.Color(int(cx[0]), int(cx[1]), int(cx[2]))
                     ZBuffer.draw_point(canvas, x, y, z[x-int(xl)], col)
@@ -361,17 +362,15 @@ class Polygon(Shape):
             cl = self.col_interp(c1, c3, tl)
             cr = self.col_interp(c2, c3, tr)
             xl, xr = l1.get_x(y), l2.get_x(y)
+            zl, zr = l1.get_z(y), l2.get_z(y)
             if xl > xr:
                 xl, xr = xr, xl
                 cl, cr = cr, cl
-            z = self.interpolate(xl, l1.get_z(y), xr,  l2.get_z(y))
+                zl, zr = zr, zl
+            z = self.interpolate(xl, zl, xr, zr)
             for x in range(int(xl), int(xr)):
-                # TODO: bullshit
-                # z = self.interpolate(xl, p1.z, xr, p3.z)[x-int(xl)]
                 t = 0 if xr == xl else (x - xl) / (xr - xl)
-                #z = self.interpolate(xl, p1.z, xr, p3.z, t)
                 cx = self.col_interp(cl, cr, t)
-                # canvas.set_at((x, y), cx)
                 try:
                     col = pg.Color(int(cx[0]), int(cx[1]), int(cx[2]))
                     ZBuffer.draw_point(canvas, x, y, z[x-int(xl)], col)
@@ -1001,10 +1000,17 @@ class App(tk.Tk):
         if self.shape is not None:
             if App.zbuf.get():
                 # self.__temp_model()
+                self.__draw_ls()
                 self.shape.fill(self.canvas, pg.Color('green'))
             else:
                 self.shape.draw(self.canvas, self.projection)
             pg.display.update()
+
+    def __draw_ls(self):
+        ls = LightSource
+        x, y, z = ls.pos
+        x, y, z = Point(x, y, z).screen_coords(self.projection)
+        pg.draw.circle(self.canvas, pg.Color('white'), (x, y), 5)
 
     def __temp_model(self):
         t = Models.Tetrahedron()
@@ -1116,6 +1122,7 @@ class App(tk.Tk):
                 if self.shape is not None:
                     if App.zbuf.get():
                         # self.__temp_model()
+                        self.__draw_ls()
                         if isinstance(self.shape, Polyhedron):
                             self.shape.fill(self.canvas, pg.Color('green'))
                     else:
