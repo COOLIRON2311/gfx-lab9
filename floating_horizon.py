@@ -9,7 +9,6 @@ import pygame as pg
 # pylint: disable=no-member
 
 
-
 @dataclass
 class Point:
     x: float
@@ -49,7 +48,7 @@ class Point:
         lookMat = np.matmul(mat1, mat2)
         return lookMat
 
-    def draw(self, surf: pg.Surface, color: str = 'white', draw_points: bool = True, dry_run=False):
+    def screen_coords(self) -> 'Point':
         lookMat = self._look_mat(np.array([Camera.position.x, Camera.position.y, Camera.position.z]) +
                                  Camera.camFront, np.array([0.0, 1.0, 0.0]))
         lookMat = lookMat.T
@@ -57,7 +56,7 @@ class Point:
         ratio = 1
         near = 0.001
         far = 1000.0
-        tan_half = tan(radians(angle)/2)
+        tan_half = np.tan(np.radians(angle)/2)
         perMat = np.array([
             [1/(tan_half*ratio), 0, 0, 0],
             [0, 1/(tan_half), 0, 0],
@@ -68,14 +67,21 @@ class Point:
         res = np.matmul(coor, lookMat)
         res = np.matmul(res, perMat)
 
-        # TODO: fix zero division
-        x = res[0]/res[3] + App.W/2
-        y = res[1]/res[3] + App.H/2
-        z = res[2]/res[3]
-        if draw_points and not dry_run:
-            # surf.set_at((int(x), int(y)), pg.Color(color))
-            pg.draw.circle(surf, pg.Color(color), (int(x), int(y)), 2)
-        return x, y, z
+        if res[3] == 0:
+            x = res[0] + App.W / 2
+            y = res[1] + App.H / 2
+            z = res[2]
+        else:
+            x = res[0]/(res[3]) + App.W/2
+            y = res[1]/(res[3]) + App.H/2
+            z = res[2]/res[3]
+        return Point(x, y, z)
+
+    def draw(self, surf: pg.Surface, color: str = 'white', draw_points: bool = True):
+        # coord = self.screen_coords()
+        if self.vis and draw_points and 0 <= self.x < App.W and 0 <= self.y < App.H:
+            # canvas.set_at((int(coord.x), int(coord.y)), pg.Color(color))
+            pg.draw.circle(surf, pg.Color(color), (int(self.x), int(self.y)), 2)
 
     def __iter__(self):
         yield self.x
@@ -89,6 +95,9 @@ class Point:
         self.y = p[1]
         self.z = p[2]
 
+    def not_on_screen(self) -> bool:
+        return not (0 <= self.x < App.W and 0 <= self.y < App.H)
+
 
 @dataclass
 class Line:
@@ -96,10 +105,10 @@ class Line:
     p2: Point
 
     def draw(self, canvas: pg.Surface, color: str = 'white', draw_points: bool = False):
-        p1X, p1Y, p1Z = self.p1.draw(canvas, color, draw_points)
-        p2X, p2Y, p2Z = self.p2.draw(canvas, color, draw_points=draw_points)
-        self.__wu(canvas, Point(p1X, p1Y, p1Z), Point(p2X, p2Y, p2Z), pg.Color(color))
-        return Point(p1X, p1Y, p1Z), Point(p2X, p2Y, p2Z)
+        # p1.draw(canvas, color, draw_points)
+        # p2.draw(canvas, color, draw_points)
+        self.__wu(canvas, self.p1, self.p2, pg.Color(color))
+        return self.p1, self.p2
 
     def transform(self, matrix: np.ndarray):
         self.p1.transform(matrix)
@@ -253,57 +262,112 @@ class App:
         pg.display.set_caption("Floating horizon")
         pg.display.init()
         self.reset()
-        self.init_points()
-        pg.display.flip()
         self.draw()
+        pg.display.flip()
 
-    def not_on_screen(self, p: Point) -> bool:
-        return p.x < 0 or p.x > App.W or p.y < 0 or p.y > App.H
+    def process_point(self, p: Point) -> None:
+        if p.not_on_screen():
+            p.vis = False
+            return
 
-    def init_points(self):
+        if p.y >= self.uph[int(p.x) - 1]:
+            p.vis = True
+            return
+
+        if p.y <= self.downh[int(p.x) - 1]:
+            p.vis = True
+            return
+
+        p.vis = False
+
+    def update_horizon(self, p: Point, prev: Point) -> None:
+        if p.not_on_screen():
+            return
+        if prev.x < 0 or p.x >= App.W:
+            return
+        elif int(prev.x) == int(p.x):
+            self.uph[int(p.x)] = max(self.uph[int(p.x)], p.y)
+            self.downh[int(p.x)] = min(self.downh[int(p.x)], p.y)
+        else:
+            gradient = (p.y - prev.y) / (p.x - prev.x)
+            for i in range(int(prev.x), int(p.x) + 1):
+                y = prev.y + gradient * (i - prev.x)
+                self.uph[i] = max(self.uph[i], y)
+                self.downh[i] = min(self.downh[i], y)
+
+    def intersect(self, p1: Point, p2: Point, reverse: bool = False) -> Point:
+        xstep = (p2.x - p1.x) / 20
+        ystep = (p2.y - p1.y) / 20
+
+        for i in range(20):
+            p = Point(p1.x + xstep * i, p1.y + ystep * i, 0)
+            self.process_point(p)
+            if reverse and p.vis:
+                return p
+            elif not reverse and not p.vis:
+                return p
+        return p2
+        # if p1.x == p2.x:
+        #     return Point(p1.x, self.uph[int(p1.x)], 0)
+        # gradient = (p2.y - p1.y) / (p2.x - p1.x)
+        # x = p1.x + gradient * (self.uph[int(p1.x)] - p1.y)
+        # return Point(x, self.uph[int(p1.x)], 0)
+
+    def calc_points(self):
         n = self.n
         func = self.func
         self.points = []
         for i in range(n, 0, -1):
             z = i * self.SCALE
-            prev = Point(0, func(0, z), z)
+            prev = Point(0, func(0, z), z).screen_coords()
+            self.process_point(prev)
+
             for j in range(n):
                 x = j * self.SCALE
-                curr = Point(x, func(x, z), z)
-                p = Point(x, self.SCALE*func(x, z), z)
-                _x, _y, _z = p.draw(self.surf, dry_run=True)
-
-                if self.not_on_screen(p):
-                    p.vis = False
-                    continue
-
-                if _y >= self.uph[int(_x) - 1]:
-                    # self.uph[int(p.x)] = p.y
-                    p.vis = True
-
-                if _y <= self.downh[int(_x) - 1]:
-                    # self.downh[int(p.x)] = p.y
-                    p.vis = True
-
+                # curr = Point(x, func(x, z), z)
+                curr = Point(x, self.SCALE*func(x, z), z).screen_coords()
+                self.process_point(curr)
+                if curr.vis:
+                    if prev.vis:
+                        Line(prev, curr).draw(self.surf)
+                        # self.points.append(prev)
+                        # self.points.append(curr)
+                        self.update_horizon(curr, prev)
+                    else:
+                        r = self.intersect(prev, curr)
+                        Line(r, curr).draw(self.surf)
+                        # self.points.append(r)
+                        # self.points.append(curr)
+                        self.update_horizon(curr, r)
                 else:
-                    p.vis = False
-
-                self.points.append(p)
+                    if prev.vis:
+                        r = self.intersect(prev, curr)
+                        Line(prev, r).draw(self.surf)
+                        # self.points.append(prev)
+                        # self.points.append(r)
+                        self.update_horizon(r, prev)
+                prev = curr
 
     def reset(self):
         self.uph = np.full((App.W), -np.inf)
         self.downh = np.full((App.W), np.inf)
         self.surf.fill('#393939')
 
-
     def draw(self):
         self.reset()
+        self.calc_points()
         ln = 100
         Line(Point(0, 0, 0), Point(ln, 0, 0)).draw(self.surf, color='red')  # x axis
         Line(Point(0, 0, 0), Point(0, ln, 0)).draw(self.surf, color='green')  # y axis
         Line(Point(0, 0, 0), Point(0, 0, ln)).draw(self.surf, color='blue')  # z axis
-        for point in self.points:
-            point.draw(self.surf)
+        # for i in range(self.n):
+        #     for j in range(self.n-1):
+        # #         Line(self.points[i*self.n + j], self.points[i*self.n + j + 1]).draw(self.surf)
+        # for point in self.points:
+        #     if point.vis:
+        #         point.draw(self.surf)
+        #     else:
+        #         point.draw(self.surf, color='red')
         pg.display.update()
 
     def run(self):
