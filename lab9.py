@@ -264,21 +264,22 @@ class Polygon(Shape):
             line.draw(canvas, projection, color, draw_points)
         # self.normal.draw(canvas, projection, 'red', draw_points=True)
 
-    def interpolate(self, x1, z1, x2, z2):
-        res = []
+    def interpolate(self, x1, z1, x2, z2, t):
+        # res = []
 
-        d = abs(int(x2)-int(x1))
-        if d < 0.001:
-            res.append(z1)
-            return res
+        # d = abs(int(x2)-int(x1))
+        # if d < 0.001:
+        #     res.append(z1)
+        #     return res
 
-        step = (z2-z1)/(x2-x1)
+        step = (z2-z1) / (x2-x1)
+        return step * t + z1
 
-        for _ in np.arange(x1, x2):
-            res.append(z1)
-            z1 += step
+        # for _ in np.arange(x1, x2):
+        #     res.append(z1)
+        #     z1 += step
 
-        return res
+        # return res
 
     def triangulate(self):
         if len(self.points) == 3:
@@ -292,6 +293,7 @@ class Polygon(Shape):
         return c1 + t * (c2 - c1)
 
     def fill(self, canvas: pg.Surface, color: pg.Color):
+        self.draw(canvas, Projection.FreeCamera, color)
         normals = self.triang_normales()
         mod = np.linalg.norm
         c = []
@@ -328,7 +330,7 @@ class Polygon(Shape):
 
         for y in range(int(p1.y), int(p3.y)):
             tl = 0 if hleft == 0 else (y - p1.y) / hleft
-            tr = 0 if hright == 0 else (y - p1.y) / hright
+            tr = 0 if hright == 0 else (y - p3.y) / hright
             cl = self.col_interp(c1, c3, tl)
             cr = self.col_interp(c1, c2, tr)
             xl, xr = l1.get_x(y), l2.get_x(y)
@@ -337,13 +339,16 @@ class Polygon(Shape):
                 cl, cr = cr, cl
             for x in range(int(xl), int(xr)):
                 # TODO: bullshit
-                z = self.interpolate(xl, p1.z, xr, p2.z)[x-int(xl)]
+                # z = self.interpolate(xl, p1.z, xr, p2.z)[x-int(xl)]
                 t = 0 if xr == xl else (x - xl) / (xr - xl)
+                z = self.interpolate(xl, p1.z, xr, p2.z, t)
                 cx = self.col_interp(cl, cr, t)
                 # canvas.set_at((x, y), cx)
-                col = pg.Color(int(cx[0]), int(cx[1]), int(cx[2]))
-                ZBuffer.draw_point(canvas, x, y, z, col)
-
+                try:
+                    col = pg.Color(int(cx[0]), int(cx[1]), int(cx[2]))
+                    ZBuffer.draw_point(canvas, x, y, z, col)
+                except ValueError:
+                    pass
         l1 = Line(p1, p3)
         l2 = Line(p2, p3)
 
@@ -361,13 +366,16 @@ class Polygon(Shape):
                 cl, cr = cr, cl
             for x in range(int(xl), int(xr)):
                 # TODO: bullshit
-                z = self.interpolate(xl, p1.z, xr, p3.z)[x-int(xl)]
+                # z = self.interpolate(xl, p1.z, xr, p3.z)[x-int(xl)]
                 t = 0 if xr == xl else (x - xl) / (xr - xl)
+                z = self.interpolate(xl, p1.z, xr, p3.z, t)
                 cx = self.col_interp(cl, cr, t)
                 # canvas.set_at((x, y), cx)
-                col = pg.Color(int(cx[0]), int(cx[1]), int(cx[2]))
-                ZBuffer.draw_point(canvas, x, y, z, col)
-
+                try:
+                    col = pg.Color(int(cx[0]), int(cx[1]), int(cx[2]))
+                    ZBuffer.draw_point(canvas, x, y, z, col)
+                except ValueError:
+                    pass
     # def fill(self, canvas: pg.Surface, color: pg.Color):
     #     ln = len(self.points)
     #     tlines = [Line(self.points[i], self.points[(i + 1) % ln])
