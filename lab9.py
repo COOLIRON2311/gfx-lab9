@@ -291,8 +291,12 @@ class Polygon(Shape):
     def col_interp(self, c1: np.ndarray, c2: np.ndarray, t: float) -> np.ndarray:
         return c1 + t * (c2 - c1)
 
+    def vecAbs(self, vec):
+        return np.sqrt(vec[0]**2+vec[1]**2+vec[2]**2)
+
     def fill(self, canvas: pg.Surface, color: pg.Color):
         # self.draw(canvas, Projection.FreeCamera, color)
+        color = np.array(color)
         normals = self.triang_normales()
         mod = np.linalg.norm
         c = []
@@ -301,20 +305,26 @@ class Polygon(Shape):
             LightSource.pos.x-self.points[0].x,
             LightSource.pos.y-self.points[0].y,
             LightSource.pos.z-self.points[0].z])
-        # c.append((normals[0] @ vecToLight) / (mod(normals[0]) * mod(vecToLight)) * color)
-        c.append(color)
+        vecToLight = vecToLight / np.linalg.norm(vecToLight)
+        normals[0] = normals[0] / np.linalg.norm(normals[0])
+        c.append( max(0,np.dot(vecToLight,normals[0])) * color)
+        # c.append(color)
         vecToLight = np.array([
             LightSource.pos.x-self.points[1].x,
             LightSource.pos.y-self.points[1].y,
             LightSource.pos.z-self.points[1].z])
-        # c.append((normals[1] @ vecToLight) / (mod(normals[1]) * mod(vecToLight)) * color)
-        c.append(color)
+        vecToLight = vecToLight / np.linalg.norm(vecToLight)
+        normals[1] = normals[1] / np.linalg.norm(normals[1])       
+        c.append(max(0,np.dot(vecToLight,normals[1])) * color)
+        # c.append(color)
         vecToLight = np.array([
             LightSource.pos.x-self.points[2].x,
             LightSource.pos.y-self.points[2].y,
             LightSource.pos.z-self.points[2].z])
-        # c.append((normals[2] @ vecToLight) / (mod(normals[2]) * mod(vecToLight)) * color)
-        c.append(color)
+        vecToLight = vecToLight / np.linalg.norm(vecToLight)
+        normals[2] = normals[2] / np.linalg.norm(normals[2])        
+        c.append(max(0,np.dot(vecToLight,normals[2])) * color)
+        # c.append(color)
 
         points = zip([self.points[i].screen_coords(Projection.FreeCamera) for i in range(len(self.points))], c)
         points = sorted(points, key=lambda x: x[0].y)
