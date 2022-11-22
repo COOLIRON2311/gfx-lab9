@@ -419,8 +419,8 @@ class Polygon(Shape):
         p1 = np.array(self.points[0])
         p2 = np.array(self.points[1])
         p3 = np.array(self.points[2])
-        v1 = p2 - p1
-        v2 = p3 - p1
+        v1 = p1 - p2
+        v2 = p3 - p2
         n = np.cross(v2, v1)
         d = np.linalg.norm(n)
         return Point(n[0] / d, n[1] / d, n[2] / d)
@@ -573,7 +573,7 @@ class Camera:
 
 
 class LightSource:
-    pos: Point = Point(200, 200, 0)
+    pos: Point = Point(200, 200, -100)
 
 
 class Models:
@@ -587,15 +587,15 @@ class Models:
     class Tetrahedron(Polyhedron):
         def __init__(self, size=100):
             t = Models.Hexahedron(size, False)
-            p1 = t.polygons[0].points[1]
+            p1 = t.polygons[0].points[0]
             p2 = t.polygons[0].points[3]
-            p3 = t.polygons[2].points[2]
-            p4 = t.polygons[1].points[3]
+            p3 = t.polygons[4].points[3]
+            p4 = t.polygons[0].points[1]
             polygons = [
                 Polygon([p1, p2, p3]),
-                Polygon([p1, p2, p4]),
-                Polygon([p1, p3, p4]),
-                Polygon([p2, p3, p4])
+                Polygon([p1, p4, p2]),
+                Polygon([p3, p4, p1]),
+                Polygon([p3, p4, p2])
             ]
             super().__init__(polygons)
 
