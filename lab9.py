@@ -1007,7 +1007,7 @@ class App(tk.Tk):
 
     def __draw_ls(self):
         ls = LightSource.pos
-        x, y, z = -ls.x, -ls.y, -ls.z
+        x, y, z = ls.x, ls.y, ls.z
         x, y, z = Point(x, y, z).screen_coords(self.projection)
         pg.draw.circle(self.canvas, pg.Color('white'), (x, y), 5)
 
