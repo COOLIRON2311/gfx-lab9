@@ -406,10 +406,10 @@ class Polygon(Shape):
         if 0 <= x < tex.shape[1] and 0 <= y < tex.shape[0]:
             return tex[y, x]
 
-    def get_tex_p(self, p: Point) -> np.ndarray:
+    def get_tex_a(self, a: np.ndarray) -> np.ndarray:
         tex = App.texture
-        if 0 <= p.x < tex.shape[1] and 0 <= p.y < tex.shape[0]:
-            return tex[int(p.y), int(p.x)]
+        if 0 <= a[0] < tex.shape[1] and 0 <= a[0] < tex.shape[0]:
+            return tex[int(a[0]), int(a[1])]
 
     def transform(self, matrix: np.ndarray):
         for point in self.points:
