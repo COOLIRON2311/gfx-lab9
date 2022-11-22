@@ -363,12 +363,12 @@ class Polygon(Shape):
             zl, zr = l1.get_z(y), l2.get_z(y)
             if xl > xr:
                 xl, xr = xr, xl
-                cl, cr = cr, cl
                 zl, zr = zr, zl
             z = self.interpolate(xl, zl, xr, zr)
             for x in range(int(xl), int(xr)):
                 t = 0 if xr == xl else (x - xl) / (xr - xl)
-                cx = self.col_interp(cl, cr, t)
+                cx = self.tex_interp(x, y, xr,y, t)
+                cx = self.get_tex_a(cx)
                 try:
                     col = pg.Color(int(cx[0]), int(cx[1]), int(cx[2]))
                     ZBuffer.draw_point(canvas, x, y, z[x-int(xl)], col)
@@ -383,18 +383,16 @@ class Polygon(Shape):
         for y in range(int(p2.y), int(p3.y)):
             tl = 0 if hleft == 0 else (y - p1.y) / hleft
             tr = 0 if hright == 0 else (y - p2.y) / hright
-            cl = self.col_interp(c1, c3, tl)
-            cr = self.col_interp(c2, c3, tr)
             xl, xr = l1.get_x(y), l2.get_x(y)
             zl, zr = l1.get_z(y), l2.get_z(y)
             if xl > xr:
                 xl, xr = xr, xl
-                cl, cr = cr, cl
                 zl, zr = zr, zl
             z = self.interpolate(xl, zl, xr, zr)
             for x in range(int(xl), int(xr)):
                 t = 0 if xr == xl else (x - xl) / (xr - xl)
-                cx = self.col_interp(cl, cr, t)
+                cx = self.tex_interp(x, y, xr,y, t)
+                cx = self.get_tex_a(cx)
                 try:
                     col = pg.Color(int(cx[0]), int(cx[1]), int(cx[2]))
                     ZBuffer.draw_point(canvas, x, y, z[x-int(xl)], col)
@@ -408,8 +406,8 @@ class Polygon(Shape):
 
     def get_tex_a(self, a: np.ndarray) -> np.ndarray:
         tex = App.texture
-        if 0 <= a[0] < tex.shape[1] and 0 <= a[0] < tex.shape[0]:
-            return tex[int(a[0]), int(a[1])]
+        #if 0 <= a[0] < tex.shape[1] and 0 <= a[0] < tex.shape[0]:
+        return tex[int(a[1] % tex.shape[0]), int(a[0] % tex.shape[1])]
 
     def transform(self, matrix: np.ndarray):
         for point in self.points:
