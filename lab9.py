@@ -142,7 +142,9 @@ class Point(Shape):
             x = self.x
             y = self.y
             z = self.z
-        return Point(x, y, z)
+        p = Point(x, y, z)
+        p.tex_coords = self.tex_coords
+        return p
 
     def draw(self, canvas: pg.Surface, projection: Projection, color: str = 'white', draw_points: bool = True):
         if draw_points and self.x < 1000 and self.y < 1000:
@@ -252,11 +254,6 @@ class Polygon(Shape):
     def col_interp(self, c1: np.ndarray, c2: np.ndarray, t: float) -> np.ndarray:
         return c1 + t * (c2 - c1)
 
-    def tex_interp(self, x1, y1, x2, y2, t: float) -> np.ndarray:
-        x = x1 + t * (x2 - x1)
-        y = y1 + t * (y2 - y1)
-        return np.array([x, y])
-
     def fill(self, canvas: pg.Surface, color: pg.Color):
         color = np.array(color)
         normal = np.array(self.normal)
@@ -330,83 +327,101 @@ class Polygon(Shape):
                 except ValueError:
                     pass
 
+    def tex_interp(self, y1, y2, u1, v1, u2, v2) -> np.ndarray:
+        if y1 == y2:
+            return np.array([u1, v1])
+        stepu = (u2-u1) / (y2-y1)
+        stepv = (v2-v1) / (y2-y1)
+        tu = []
+        tv = []
+        for _ in range(int(y1), int(y2)+1):
+            tu.append(u1)
+            tv.append(v1)
+            u1 += stepu
+            v1 += stepv
+        return np.array((tu, tv)).T
+
+
     def fill_textured(self, canvas: pg.Surface):
-        normal = np.array(self.normal)
-        c = []
+        # normal = np.array(self.normal)
+        tc = []
         for i in range(len(self.points)):
             vecToLight = np.array([
                 LightSource.pos.x-self.points[i].x,
                 LightSource.pos.y-self.points[i].y,
                 LightSource.pos.z-self.points[i].z])
             vecToLight = vecToLight / np.linalg.norm(vecToLight)
-            c.append(max(0, np.dot(vecToLight, normal)) * self.get_tex(*self.points[i].tex_coords))
+            tc.append(self.points[i].tex_coords)
 
-        points = zip([self.points[i].screen_coords(Projection.FreeCamera) for i in range(len(self.points))], c)
+        points = zip([self.points[i].screen_coords(Projection.FreeCamera) for i in range(len(self.points))], tc)
         points = sorted(points, key=lambda x: x[0].y)
         p1: Point
         p2: Point
         p3: Point
+
         p1, p2, p3 = points[0][0], points[1][0], points[2][0]
         c1, c2, c3 = points[0][1], points[1][1], points[2][1]
 
         l1 = Line(p1, p3)
         l2 = Line(p1, p2)
 
-        hleft = p3.y - p1.y
-        hright = p2.y - p1.y
-
+        tex_12 = self.tex_interp(p1.y, p2.y, c1[0], c1[1], c2[0], c2[1])
+        tex_13 = self.tex_interp(p1.y, p3.y, c1[0], c1[1], c3[0], c3[1])
+        tex_23 = self.tex_interp(p2.y, p3.y, c2[0], c2[1], c3[0], c3[1])
         # TODO: fix this
         for y in range(int(p1.y), int(p2.y)):
-            tl = 0 if hleft == 0 else (y - p1.y) / hleft
-            tr = 0 if hright == 0 else (y - p1.y) / hright
             xl, xr = l1.get_x(y), l2.get_x(y)
             zl, zr = l1.get_z(y), l2.get_z(y)
             if xl > xr:
                 xl, xr = xr, xl
                 zl, zr = zr, zl
             z = self.interpolate(xl, zl, xr, zr)
+            tex_xl = c2[0]
+            tex_xr = c3[0]
+            if tex_xl > tex_xr:
+                tex_xl, tex_xr = tex_xr, tex_xl
             for x in range(int(xl), int(xr)):
                 t = 0 if xr == xl else (x - xl) / (xr - xl)
-                cx = self.tex_interp(x, y, xr,y, t)
                 cx = self.get_tex_a(cx)
                 try:
                     col = pg.Color(int(cx[0]), int(cx[1]), int(cx[2]))
                     ZBuffer.draw_point(canvas, x, y, z[x-int(xl)], col)
                 except ValueError:
                     pass
+            tex_y += 1
+
         l1 = Line(p1, p3)
         l2 = Line(p2, p3)
 
-        hleft = p3.y - p1.y
-        hright = p3.y - p2.y
-
+        tex_y = c2[1]
         for y in range(int(p2.y), int(p3.y)):
-            tl = 0 if hleft == 0 else (y - p1.y) / hleft
-            tr = 0 if hright == 0 else (y - p2.y) / hright
             xl, xr = l1.get_x(y), l2.get_x(y)
             zl, zr = l1.get_z(y), l2.get_z(y)
             if xl > xr:
                 xl, xr = xr, xl
                 zl, zr = zr, zl
             z = self.interpolate(xl, zl, xr, zr)
+            tex_xl = c1[0]
+            tex_xr = c3[0]
+            if tex_xl > tex_xr:
+                tex_xl, tex_xr = tex_xr, tex_xl
             for x in range(int(xl), int(xr)):
                 t = 0 if xr == xl else (x - xl) / (xr - xl)
-                cx = self.tex_interp(x, y, xr,y, t)
+                cx = self.tex_interp(tex_xl, tex_y, tex_xr, tex_y, t)
                 cx = self.get_tex_a(cx)
                 try:
                     col = pg.Color(int(cx[0]), int(cx[1]), int(cx[2]))
                     ZBuffer.draw_point(canvas, x, y, z[x-int(xl)], col)
                 except ValueError:
                     pass
+            tex_y += 1
 
     def get_tex(self, x, y) -> np.ndarray:
         tex = App.texture
-        if 0 <= x < tex.shape[1] and 0 <= y < tex.shape[0]:
-            return tex[y, x]
+        return tex[y % tex.shape[0], x % tex.shape[1]]
 
     def get_tex_a(self, a: np.ndarray) -> np.ndarray:
         tex = App.texture
-        #if 0 <= a[0] < tex.shape[1] and 0 <= a[0] < tex.shape[0]:
         return tex[int(a[1] % tex.shape[0]), int(a[0] % tex.shape[1])]
 
     def transform(self, matrix: np.ndarray):
