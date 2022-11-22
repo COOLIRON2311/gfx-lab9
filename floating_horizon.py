@@ -295,13 +295,23 @@ class App:
         self.downh = np.full((App.W), np.inf)
         self.surf.fill('#393939')
 
+    def axis(self):
+        ln = 100
+        p1 = Point(0, 0, 0).screen_coords()
+
+        p2 = Point(ln, 0, 0).screen_coords()
+        Line(p1, p2).draw(self.surf, color='red') # x axis
+
+        p2 = Point(0, ln, 0).screen_coords()
+        Line(p1, p2).draw(self.surf, color='green') # y axis
+
+        p2 = Point(0, 0, ln).screen_coords()
+        Line(p1, p2).draw(self.surf, color='blue') # z axis
+
     def draw(self):
         self.reset()
         self.calc_points()
-        # ln = 100
-        # Line(Point(0, 0, 0), Point(ln, 0, 0)).draw(self.surf, color='red')  # x axis
-        # Line(Point(0, 0, 0), Point(0, ln, 0)).draw(self.surf, color='green')  # y axis
-        # Line(Point(0, 0, 0), Point(0, 0, ln)).draw(self.surf, color='blue')  # z axis
+        # self.axis()
         pg.display.update()
 
     def run(self):
