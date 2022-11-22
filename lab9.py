@@ -55,6 +55,7 @@ class Point(Shape):
     x: float
     y: float
     z: float
+    tex_coords: np.array = field(init=False, default=None)
 
     def __hash__(self) -> int:
         return hash((self.x, self.y, self.z))
@@ -211,6 +212,10 @@ class Polygon(Shape):
 
     def __post_init__(self):
         self.normal = self.calculate_normal()
+        if len(self.points) == 3:
+            self.points[0].tex_coords = np.array([0, 0])
+            self.points[1].tex_coords = np.array([0, 1])
+            self.points[2].tex_coords = np.array([1, 1])
 
     def draw(self, canvas: pg.Surface, projection: Projection, color: str = 'white', draw_points: bool = False):
         ln = len(self.points)
@@ -246,6 +251,11 @@ class Polygon(Shape):
 
     def col_interp(self, c1: np.ndarray, c2: np.ndarray, t: float) -> np.ndarray:
         return c1 + t * (c2 - c1)
+
+    def tex_interp(self, x1, y1, x2, y2, t: float) -> np.ndarray:
+        x = x1 + t * (x2 - x1)
+        y = y1 + t * (y2 - y1)
+        return np.array([x, y])
 
     def fill(self, canvas: pg.Surface, color: pg.Color):
         color = np.array(color)
@@ -319,31 +329,78 @@ class Polygon(Shape):
                     ZBuffer.draw_point(canvas, x, y, z[x-int(xl)], col)
                 except ValueError:
                     pass
-    # def fill(self, canvas: pg.Surface, color: pg.Color):
-    #     ln = len(self.points)
-    #     tlines = [Line(self.points[i], self.points[(i + 1) % ln])
-    #               for i in range(ln)]
-    #     lines: list[Line] = []
-    #     points: set[Point] = set()
-    #     for l in tlines:
-    #         p1, p2 = l.draw(canvas, Projection.FreeCamera)
-    #         lines.append(Line(p1, p2))
-    #         points.add(p1)
-    #         points.add(p2)
-    #     ymax = max(p.y for p in points)
-    #     ymin = min(p.y for p in points)
 
-    #     for y in range(int(ymin), int(ymax)):
-    #         intersections: list[Point] = []
-    #         for line in lines:
-    #             if line.p1.y <= y < line.p2.y or line.p2.y <= y < line.p1.y:
-    #                 intersections.append(Point(line.get_x(y), y, line.get_z(y)))
-    #         intersections.sort(key=lambda p: p.x)
-    #         for i in range(0, len(intersections), 2):
-    #             z = self.interpolate(intersections[i].x, intersections[i].z, intersections[i+1].x, intersections[i+1].z)
-    #             for x in range(int(intersections[i].x), int(intersections[i+1].x)):
-    #                 cz = z[x-int(intersections[i].x)]
-    #                 ZBuffer.draw_point(canvas, x, y, cz, color)
+    def fill_textured(self, canvas: pg.Surface):
+        normal = np.array(self.normal)
+        c = []
+        for i in range(len(self.points)):
+            vecToLight = np.array([
+                LightSource.pos.x-self.points[i].x,
+                LightSource.pos.y-self.points[i].y,
+                LightSource.pos.z-self.points[i].z])
+            vecToLight = vecToLight / np.linalg.norm(vecToLight)
+            c.append(max(0, np.dot(vecToLight, normal)) * self.get_tex(*self.points[i].tex_coords))
+
+        points = zip([self.points[i].screen_coords(Projection.FreeCamera) for i in range(len(self.points))], c)
+        points = sorted(points, key=lambda x: x[0].y)
+        p1: Point
+        p2: Point
+        p3: Point
+        p1, p2, p3 = points[0][0], points[1][0], points[2][0]
+        c1, c2, c3 = points[0][1], points[1][1], points[2][1]
+
+        l1 = Line(p1, p3)
+        l2 = Line(p1, p2)
+
+        hleft = p3.y - p1.y
+        hright = p2.y - p1.y
+
+        # TODO: fix this
+        for y in range(int(p1.y), int(p2.y)):
+            tl = 0 if hleft == 0 else (y - p1.y) / hleft
+            tr = 0 if hright == 0 else (y - p1.y) / hright
+            xl, xr = l1.get_x(y), l2.get_x(y)
+            zl, zr = l1.get_z(y), l2.get_z(y)
+            if xl > xr:
+                xl, xr = xr, xl
+                cl, cr = cr, cl
+                zl, zr = zr, zl
+            z = self.interpolate(xl, zl, xr, zr)
+            for x in range(int(xl), int(xr)):
+                t = 0 if xr == xl else (x - xl) / (xr - xl)
+                cx = self.col_interp(cl, cr, t)
+                try:
+                    col = pg.Color(int(cx[0]), int(cx[1]), int(cx[2]))
+                    ZBuffer.draw_point(canvas, x, y, z[x-int(xl)], col)
+                except ValueError:
+                    pass
+        l1 = Line(p1, p3)
+        l2 = Line(p2, p3)
+
+        hleft = p3.y - p1.y
+        hright = p3.y - p2.y
+
+        for y in range(int(p2.y), int(p3.y)):
+            tl = 0 if hleft == 0 else (y - p1.y) / hleft
+            tr = 0 if hright == 0 else (y - p2.y) / hright
+            cl = self.col_interp(c1, c3, tl)
+            cr = self.col_interp(c2, c3, tr)
+            xl, xr = l1.get_x(y), l2.get_x(y)
+            zl, zr = l1.get_z(y), l2.get_z(y)
+            if xl > xr:
+                xl, xr = xr, xl
+                cl, cr = cr, cl
+                zl, zr = zr, zl
+            z = self.interpolate(xl, zl, xr, zr)
+            for x in range(int(xl), int(xr)):
+                t = 0 if xr == xl else (x - xl) / (xr - xl)
+                cx = self.col_interp(cl, cr, t)
+                try:
+                    col = pg.Color(int(cx[0]), int(cx[1]), int(cx[2]))
+                    ZBuffer.draw_point(canvas, x, y, z[x-int(xl)], col)
+                except ValueError:
+                    pass
+
     def get_tex(self, x, y) -> np.ndarray:
         tex = App.texture
         if 0 <= x < tex.shape[1] and 0 <= y < tex.shape[0]:
@@ -438,6 +495,10 @@ class Polyhedron(Shape):
         for poly in self.polygons:
             poly.fill(canvas, colors[count % 4])
             count += 1
+
+    def fill_textured(self, canvas: pg.Surface):
+        for poly in self.polygons:
+            poly.fill_textured(canvas)
 
 
 class Camera:
@@ -674,7 +735,7 @@ class Models:
 
 
 class App(tk.Tk):
-    W: int = 1000
+    W: int = 1200
     H: int = 600
     shape: Shape = None
     shape_type_idx: int
@@ -738,6 +799,9 @@ class App(tk.Tk):
         App.zbuf = tk.BooleanVar()
         self._zbuf = tk.Checkbutton(self.buttons, text="Z-buffer", var=App.zbuf, command=self.reset)
 
+        App.tex = tk.BooleanVar()
+        self._tex = tk.Checkbutton(self.buttons, text="Текстурирование", var=App.tex, command=self.reset)
+
         self.shapesbox = tk.Listbox(
             self.buttons, selectmode=tk.SINGLE, height=1, width=16)
         self.scroll1 = tk.Scrollbar(
@@ -760,12 +824,14 @@ class App(tk.Tk):
         self.grid.pack(side=tk.LEFT, padx=5)
         self._bfc.pack(side=tk.LEFT, padx=5)
         self._zbuf.pack(side=tk.LEFT, padx=5)
+        self._tex.pack(side=tk.LEFT, padx=5)
 
         self.phis.set(self.phi)
         self.thetas.set(self.theta)
         self.dists.set(self.dist)
         App.bfc.set(False)
         App.zbuf.set(False)
+        App.tex.set(False)
 
         self.scroll1.pack(side=tk.RIGHT, fill=tk.Y)
         self.shapesbox.pack(side=tk.RIGHT, padx=1)
@@ -954,6 +1020,9 @@ class App(tk.Tk):
                 # self.__temp_model()
                 self.__draw_ls()
                 self.shape.fill(self.canvas, pg.Color('green'))
+            elif App.tex.get():
+                self.__draw_ls()
+                self.shape.fill_textured(self.canvas)
             else:
                 self.shape.draw(self.canvas, self.projection)
             pg.display.update()
@@ -1077,6 +1146,10 @@ class App(tk.Tk):
                         self.__draw_ls()
                         if isinstance(self.shape, Polyhedron):
                             self.shape.fill(self.canvas, pg.Color('green'))
+                    elif App.tex.get():
+                        self.__draw_ls()
+                        if isinstance(self.shape, Polyhedron):
+                            self.shape.fill_textured(self.canvas)
                     else:
                         self.shape.draw(self.canvas, self.projection)
                     pg.display.update()
