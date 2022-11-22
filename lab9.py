@@ -167,12 +167,6 @@ class Point(Shape):
     def center(self) -> 'Point':
         return Point(self.x, self.y, self.z)
 
-    def normalized(self) -> 'Point':
-        norm = np.linalg.norm([self.x, self.y, self.z])
-        if norm == 0:
-            return self
-        return Point(self.x/norm, self.y/norm, self.z/norm)
-
 
 @dataclass
 class Line(Shape):
@@ -180,10 +174,10 @@ class Line(Shape):
     p2: Point
 
     def draw(self, canvas: pg.Surface, projection: Projection, color: str = 'white', draw_points: bool = False):
-        p1X, p1Y, p1Z = self.p1.screen_coords(projection)
-        p2X, p2Y, p2Z = self.p2.screen_coords(projection)
-        self.__wu(canvas, Point(p1X, p1Y, p1Z), Point(p2X, p2Y, p2Z), pg.Color(color))
-        return Point(p1X, p1Y, p1Z), Point(p2X, p2Y, p2Z)
+        p1 = self.p1.screen_coords(projection)
+        p2 = self.p2.screen_coords(projection)
+        pg.draw.line(canvas, pg.Color(color), (p1.x, p1.y), (p2.x, p2.y))
+        return p1, p2
 
     def transform(self, matrix: np.ndarray):
         self.p1.transform(matrix)
@@ -203,47 +197,6 @@ class Line(Shape):
         if self.p1.y == self.p2.y:
             return self.p1.z
         return self.p1.z + (self.p2.z - self.p1.z) * (y - self.p1.y) / (self.p2.y-self.p1.y)
-
-    def __wu(self, canvas: pg.Surface, a: Point, b: Point, color: pg.Color) -> None:
-        if a.x > b.x:
-            a, b = b, a
-
-        dx = b.x - a.x
-        dy = b.y - a.y
-
-        if dx == 0:
-            if a.y > b.y:
-                a, b = b, a
-            for y in range(int(a.y), int(b.y)):
-                canvas.set_at((int(a.x), y), color)
-                # ZBuffer.draw_point(canvas, int(a.x), y, a.z, color)
-            return
-
-        gradient = dy/dx
-
-        y = a.y+gradient
-
-        if abs(gradient) < 1:
-            if a.x > b.x:
-                a, b = b, a
-
-            for i in range(int(a.x), int(b.x)):
-                canvas.set_at((i, int(y)), color)
-                canvas.set_at((i, int(y+1)), color)  # single color lines
-                # ZBuffer.draw_point(canvas, i, int(y), a.z, color)
-                # ZBuffer.draw_point(canvas, i, int(y+1), a.z, color)
-                y += gradient
-        else:
-            if a.y > b.y:
-                a, b = b, a
-            gradient2 = dx/dy
-            x = a.x + gradient2
-            for i in range(int(a.y), int(b.y)):
-                canvas.set_at((int(x), i), color)
-                canvas.set_at((int(x+1), i), color)  # single color lines
-                # ZBuffer.draw_point(canvas, int(x), i, a.z, color)
-                # ZBuffer.draw_point(canvas, int(x+1), i, a.z, color)
-                x += gradient2
 
     @property
     def center(self) -> 'Point':
