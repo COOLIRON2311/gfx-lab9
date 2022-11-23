@@ -214,10 +214,10 @@ class Polygon(Shape):
 
     def __post_init__(self):
         self.normal = self.calculate_normal()
-        if len(self.points) == 3:
-            self.points[0].tex_coords = np.array([0, 0])
-            self.points[1].tex_coords = np.array([0, 1])
-            self.points[2].tex_coords = np.array([1, 1])
+        # if len(self.points) == 3:
+        #     self.points[0].tex_coords = np.array([0, 0])
+        #     self.points[1].tex_coords = np.array([0, 1])
+        #     self.points[2].tex_coords = np.array([1, 1])
 
     def draw(self, canvas: pg.Surface, projection: Projection, color: str = 'white', draw_points: bool = False):
         ln = len(self.points)
@@ -345,15 +345,15 @@ class Polygon(Shape):
     def fill_textured(self, canvas: pg.Surface):
         # normal = np.array(self.normal)
         tc = []
-        for i in range(len(self.points)):
-            vecToLight = np.array([
-                LightSource.pos.x-self.points[i].x,
-                LightSource.pos.y-self.points[i].y,
-                LightSource.pos.z-self.points[i].z])
-            vecToLight = vecToLight / np.linalg.norm(vecToLight)
-            tc.append(self.points[i].tex_coords)
+        sp = sorted(self.points, key=lambda x: x.y)
+        # sp[0].tex_coords = np.array([0,0])
+        # sp[1].tex_coords = np.array([1,1])
+        # sp[2].tex_coords = np.array([0.5,1])
+        
+        for p in sp:
+            tc.append(p.tex_coords)
 
-        points = zip([self.points[i].screen_coords(Projection.FreeCamera) for i in range(len(self.points))], tc)
+        points = zip([sp[i].screen_coords(Projection.FreeCamera) for i in range(len(self.points))], tc)
         points = sorted(points, key=lambda x: x[0].y)
         p1: Point
         p2: Point
@@ -368,7 +368,7 @@ class Polygon(Shape):
         tex_12 = self.tex_interp(p1.y, p2.y, c1[0], c1[1], c2[0], c2[1])
         tex_13 = self.tex_interp(p1.y, p3.y, c1[0], c1[1], c3[0], c3[1])
         tex_23 = self.tex_interp(p2.y, p3.y, c2[0], c2[1], c3[0], c3[1])
-        # TODO: fix this
+
         for y in range(int(p1.y), int(p2.y)):
             xl, xr = l1.get_x(y), l2.get_x(y)
             zl, zr = l1.get_z(y), l2.get_z(y)
@@ -376,24 +376,28 @@ class Polygon(Shape):
                 xl, xr = xr, xl
                 zl, zr = zr, zl
             z = self.interpolate(xl, zl, xr, zr)
-            tex_xl = c2[0]
-            tex_xr = c3[0]
-            if tex_xl > tex_xr:
-                tex_xl, tex_xr = tex_xr, tex_xl
+            cy1 = tex_12[y-int(p1.y)][1]
+            cy2 = tex_13[y-int(p1.y)][1]
+            cx1 = tex_12[y-int(p1.y)][0]
+            cx2 = tex_13[y-int(p1.y)][0]
+            cur_tex = self.tex_interp(xl,xr,cx1,cy1,cx2,cy2)            
+            # if tex_xl > tex_xr:
+            #     tex_xl, tex_xr = tex_xr, tex_xl
             for x in range(int(xl), int(xr)):
                 t = 0 if xr == xl else (x - xl) / (xr - xl)
-                cx = self.get_tex_a(cx)
+                coor1 = cur_tex[x-int(xl)][0]*App.texture.shape[0]
+                coor2 = cur_tex[x-int(xl)][1]*App.texture.shape[1]
+                cx = self.get_tex_a(np.array([coor1,coor2]))
+                #cx = self.get_tex_a(cx)
                 try:
                     col = pg.Color(int(cx[0]), int(cx[1]), int(cx[2]))
                     ZBuffer.draw_point(canvas, x, y, z[x-int(xl)], col)
                 except ValueError:
                     pass
-            tex_y += 1
 
         l1 = Line(p1, p3)
         l2 = Line(p2, p3)
 
-        tex_y = c2[1]
         for y in range(int(p2.y), int(p3.y)):
             xl, xr = l1.get_x(y), l2.get_x(y)
             zl, zr = l1.get_z(y), l2.get_z(y)
@@ -401,20 +405,24 @@ class Polygon(Shape):
                 xl, xr = xr, xl
                 zl, zr = zr, zl
             z = self.interpolate(xl, zl, xr, zr)
-            tex_xl = c1[0]
-            tex_xr = c3[0]
-            if tex_xl > tex_xr:
-                tex_xl, tex_xr = tex_xr, tex_xl
+            cy1 = tex_13[y-int(p2.y)][1]
+            cy2 = tex_23[y-int(p2.y)][1]
+            cx1 = tex_13[y-int(p2.y)][0]
+            cx2 = tex_23[y-int(p2.y)][0]
+            cur_tex = self.tex_interp(xl,xr,cx1,cy1,cx2,cy2)            
+            # if tex_xl > tex_xr:
+            #     tex_xl, tex_xr = tex_xr, tex_xl
             for x in range(int(xl), int(xr)):
                 t = 0 if xr == xl else (x - xl) / (xr - xl)
-                cx = self.tex_interp(tex_xl, tex_y, tex_xr, tex_y, t)
-                cx = self.get_tex_a(cx)
+                coor1 = cur_tex[x-int(xl)][0]*App.texture.shape[0]
+                coor2 = cur_tex[x-int(xl)][1]*App.texture.shape[1]
+                cx = self.get_tex_a(np.array([coor1,coor2]))
+                #cx = self.get_tex_a(cx)
                 try:
                     col = pg.Color(int(cx[0]), int(cx[1]), int(cx[2]))
                     ZBuffer.draw_point(canvas, x, y, z[x-int(xl)], col)
                 except ValueError:
                     pass
-            tex_y += 1
 
     def get_tex(self, x, y) -> np.ndarray:
         tex = App.texture
@@ -632,13 +640,21 @@ class Models:
     class Hexahedron(Polyhedron):
         def __init__(self, size=100, triangulate=True):
             p1 = Point(0, 0, 0)
+            p1.tex_coords = np.array([1.0,0.0])
             p2 = Point(size, 0, 0)
+            p2.tex_coords = np.array([0.0,0.0])
             p3 = Point(size, size, 0)
+            p3.tex_coords = np.array([0.0,1.0])
             p4 = Point(0, size, 0)
+            p4.tex_coords = np.array([1.0,1.0])            
             p5 = Point(0, 0, size)
+            p5.tex_coords = np.array([0.0,0.0])            
             p6 = Point(size, 0, size)
+            p6.tex_coords = np.array([1.0,0.0])            
             p7 = Point(size, size, size)
+            p7.tex_coords = np.array([1.0,1.0])            
             p8 = Point(0, size, size)
+            p8.tex_coords = np.array([0.0,1.0])            
             polygons = [
                 Polygon([p4, p3, p2, p1]),
                 Polygon([p1, p2, p6, p5]),
