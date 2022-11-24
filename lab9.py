@@ -345,6 +345,13 @@ class Polygon(Shape):
     def fill_textured(self, canvas: pg.Surface):
         # normal = np.array(self.normal)
         tc = []
+        
+        # for i in range(0,3):
+        #     j = i
+        #     while j>0 and self.points[j-1].y > self.points[j].y:
+        #         self.points[j-1], self.points[j] = self.points[j],self.points[j-1]     
+        #         j-=1          
+        
         sp = sorted(self.points, key=lambda x: x.y)
         # sp[0].tex_coords = np.array([0,0])
         # sp[1].tex_coords = np.array([1,1])
@@ -372,17 +379,19 @@ class Polygon(Shape):
         for y in range(int(p1.y), int(p2.y)):
             xl, xr = l1.get_x(y), l2.get_x(y)
             zl, zr = l1.get_z(y), l2.get_z(y)
+            cy1 = tex_13[y-int(p1.y)][1]
+            cy2 = tex_12[y-int(p1.y)][1]
+            cx1 = tex_13[y-int(p1.y)][0]
+            cx2 = tex_12[y-int(p1.y)][0]
             if xl > xr:
                 xl, xr = xr, xl
                 zl, zr = zr, zl
+                cx1,cx2 = cx2,cx1
+                cy1,cy2 = cy2,cy1
             z = self.interpolate(xl, zl, xr, zr)
-            cy1 = tex_12[y-int(p1.y)][1]
-            cy2 = tex_13[y-int(p1.y)][1]
-            cx1 = tex_12[y-int(p1.y)][0]
-            cx2 = tex_13[y-int(p1.y)][0]
+            # if cx2 > cx1:
+            #     cx1,cx2 = cx2, cx1
             cur_tex = self.tex_interp(xl,xr,cx1,cy1,cx2,cy2)            
-            # if tex_xl > tex_xr:
-            #     tex_xl, tex_xr = tex_xr, tex_xl
             for x in range(int(xl), int(xr)):
                 t = 0 if xr == xl else (x - xl) / (xr - xl)
                 coor1 = cur_tex[x-int(xl)][0]*App.texture.shape[0]
@@ -401,17 +410,19 @@ class Polygon(Shape):
         for y in range(int(p2.y), int(p3.y)):
             xl, xr = l1.get_x(y), l2.get_x(y)
             zl, zr = l1.get_z(y), l2.get_z(y)
+            cy1 = tex_13[y-int(p1.y)][1]
+            cy2 = tex_23[y-int(p2.y)][1]
+            cx1 = tex_13[y-int(p1.y)][0]
+            cx2 = tex_23[y-int(p2.y)][0]
             if xl > xr:
                 xl, xr = xr, xl
                 zl, zr = zr, zl
+                cx1,cx2 = cx2,cx1
+                cy1,cy2 = cy2,cy1                
             z = self.interpolate(xl, zl, xr, zr)
-            cy1 = tex_13[y-int(p2.y)][1]
-            cy2 = tex_23[y-int(p2.y)][1]
-            cx1 = tex_13[y-int(p2.y)][0]
-            cx2 = tex_23[y-int(p2.y)][0]
+            # if cx2 > cx1:w
+            #     cx1,cx2 = cx2, cx1
             cur_tex = self.tex_interp(xl,xr,cx1,cy1,cx2,cy2)            
-            # if tex_xl > tex_xr:
-            #     tex_xl, tex_xr = tex_xr, tex_xl
             for x in range(int(xl), int(xr)):
                 t = 0 if xr == xl else (x - xl) / (xr - xl)
                 coor1 = cur_tex[x-int(xl)][0]*App.texture.shape[0]
@@ -622,16 +633,45 @@ class Models:
     class Tetrahedron(Polyhedron):
         def __init__(self, size=100):
             t = Models.Hexahedron(size, False)
-            p1 = t.polygons[0].points[0]
-            p2 = t.polygons[0].points[3]
-            p3 = t.polygons[4].points[3]
-            p4 = t.polygons[0].points[1]
+            # p1 = t.polygons[0].points[0]
+            # p2 = t.polygons[0].points[3]
+            # p3 = t.polygons[4].points[3]
+            # p4 = t.polygons[0].points[1]
+            # polygons = [
+            #     Polygon([p1, p2, p3]),
+            #     Polygon([p1, p4, p2]),
+            #     Polygon([p3, p4, p1]),
+            #     Polygon([p3, p4, p2])
+            # ]
+            
+            #1
+            p1 = t.polygons[4].points[3]
+            p2 = t.polygons[0].points[1]
+            p3 = t.polygons[0].points[3]
+            
+            #2
+            p4 = t.polygons[4].points[3]
+            p5 = t.polygons[4].points[1]
+            p6 = t.polygons[4].points[0]
+            
+            #3
+            p7 = t.polygons[0].points[3]
+            p8 = t.polygons[0].points[0]
+            p9 = t.polygons[0].points[1]
+            
+            #4
+            p10 = t.polygons[3].points[0]
+            p11 = t.polygons[3].points[1]
+            p12 = t.polygons[3].points[2]            
+            
             polygons = [
-                Polygon([p1, p2, p3]),
-                Polygon([p1, p4, p2]),
-                Polygon([p3, p4, p1]),
-                Polygon([p3, p4, p2])
+                Polygon([p1,p2,p3]),
+                Polygon([p6,p5,p4]),
+                Polygon([p7,p8,p9]),
+                Polygon([p10,p11,p12])
+                
             ]
+            
             super().__init__(polygons)
 
         def __repr__(self) -> str:
@@ -639,29 +679,92 @@ class Models:
 
     class Hexahedron(Polyhedron):
         def __init__(self, size=100, triangulate=True):
-            p1 = Point(0, 0, 0)
+            # p1 = Point(0, 0, 0)
+            # p1.tex_coords = np.array([1.0,0.0])
+            # p2 = Point(size, 0, 0)
+            # p2.tex_coords = np.array([0.0,0.0])
+            # p3 = Point(size, size, 0)
+            # p3.tex_coords = np.array([0.0,1.0])
+            # p4 = Point(0, size, 0)
+            # p4.tex_coords = np.array([1.0,1.0])            
+            # p5 = Point(0, 0, size)
+            # p5.tex_coords = np.array([0.0,0.0])            
+            # p6 = Point(size, 0, size)
+            # p6.tex_coords = np.array([1.0,0.0])            
+            # p7 = Point(size, size, size)
+            # p7.tex_coords = np.array([1.0,1.0])            
+            # p8 = Point(0, size, size)
+            # p8.tex_coords = np.array([0.0,1.0])            
+            # polygons = [
+            #     Polygon([p4, p3, p2, p1]),
+            #     Polygon([p1, p2, p6, p5]),
+            #     Polygon([p3, p7, p6, p2]),
+            #     Polygon([p3, p4, p8, p7]),
+            #     Polygon([p4, p1, p5, p8]),
+            #     Polygon([p5, p6, p7, p8])
+            # ]
+            #1
+            p1 = Point(0,0,0)
             p1.tex_coords = np.array([1.0,0.0])
-            p2 = Point(size, 0, 0)
+            p2 = Point(size,0,0)
             p2.tex_coords = np.array([0.0,0.0])
-            p3 = Point(size, size, 0)
+            p3 = Point(size,size,0)
             p3.tex_coords = np.array([0.0,1.0])
-            p4 = Point(0, size, 0)
-            p4.tex_coords = np.array([1.0,1.0])            
-            p5 = Point(0, 0, size)
-            p5.tex_coords = np.array([0.0,0.0])            
-            p6 = Point(size, 0, size)
-            p6.tex_coords = np.array([1.0,0.0])            
-            p7 = Point(size, size, size)
-            p7.tex_coords = np.array([1.0,1.0])            
-            p8 = Point(0, size, size)
-            p8.tex_coords = np.array([0.0,1.0])            
+            p4 = Point(0,size,0)
+            p4.tex_coords = np.array([1.0,1.0])
+            #2
+            p5 = Point(0,0,0)
+            p5.tex_coords = np.array([1.0,0.0])
+            p6 = Point(size,0,0)
+            p6.tex_coords = np.array([0.0,0.0])
+            p7 = Point(size,0,size)
+            p7.tex_coords = np.array([0.0,1.0])
+            p8 = Point(0,0,size)
+            p8.tex_coords = np.array([1.0,1.0])
+            #3
+            p9 = Point(size,size,0)
+            p9.tex_coords = np.array([1.0,0.0])
+            p10 = Point(size,size,size)
+            p10.tex_coords = np.array([0.0,0.0])
+            p11 = Point(size,0,size)
+            p11.tex_coords = np.array([0.0,1.0])
+            p12 = Point(size,0,0)
+            p12.tex_coords = np.array([1.0,1.0])
+            #4
+            p13 = Point(size,size,0)
+            p13.tex_coords = np.array([1.0,0.0])
+            p14 = Point(0,size,0)
+            p14.tex_coords = np.array([0.0,0.0])
+            p15 = Point(0,size,size)
+            p15.tex_coords = np.array([0.0,1.0])
+            p16 = Point(size,size,size)
+            p16.tex_coords = np.array([1.0,1.0])
+            #5
+            p17 = Point(0,size,0)
+            p17.tex_coords = np.array([1.0,0.0])
+            p18 = Point(0,0,0)
+            p18.tex_coords = np.array([0.0,0.0])
+            p19 = Point(0,0,size)
+            p19.tex_coords = np.array([0.0,1.0])
+            p20 = Point(0,size,size)
+            p20.tex_coords = np.array([1.0,1.0])
+            #6
+            p21 = Point(0,0,size)
+            p21.tex_coords = np.array([1.0,0.0])
+            p22 = Point(size,0,size)
+            p22.tex_coords = np.array([0.0,0.0])
+            p23 = Point(size,size,size)
+            p23.tex_coords = np.array([0.0,1.0])
+            p24 = Point(0,size,size)
+            p24.tex_coords = np.array([1.0,1.0])                        
+            
             polygons = [
-                Polygon([p4, p3, p2, p1]),
-                Polygon([p1, p2, p6, p5]),
-                Polygon([p3, p7, p6, p2]),
-                Polygon([p3, p4, p8, p7]),
-                Polygon([p4, p1, p5, p8]),
-                Polygon([p5, p6, p7, p8])
+                Polygon([p4,p3,p2,p1]),
+                Polygon([p5,p6,p7,p8]),
+                Polygon([p9,p10,p11,p12]),
+                Polygon([p13,p14,p15,p16]),
+                Polygon([p17,p18,p19,p20]),
+                Polygon([p21,p22,p23,p24])
             ]
             super().__init__(polygons, triangulate)
 
@@ -789,7 +892,7 @@ class App(tk.Tk):
         self.projection = Projection(self.projection_idx)
         self.create_widgets()
         try:
-            image = Image.open("texture.jpg").convert("RGB")
+            image = Image.open("woodtext.jpg").convert("RGB")
             App.texture = np.array(image)
             print(f"Texture loaded, size {self.texture.shape}")
         except FileNotFoundError:
@@ -1195,7 +1298,7 @@ class ZBuffer:
 
     @staticmethod
     def draw_point(canvas: pg.Surface, x: int, y: int, z: float, color: pg.Color):
-        if ZBuffer.enabled and 0 <= x < App.W and 0 <= y < App.H:
+        if True and 0 <= x < App.W and 0 <= y < App.H:
             if ZBuffer.data[y, x] > z:
                 ZBuffer.data[y, x] = z
                 canvas.set_at((x, y), color)
